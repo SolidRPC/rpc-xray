@@ -1,0 +1,72 @@
+{
+  "name": "@solidrpc/rpc-xray",
+  "version": "0.1.0",
+  "description": "See every request your RPC provider failed. A pass-through wrapper that measures real JSON-RPC traffic.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SolidRPC/rpc-xray.git",
+    "directory": "js"
+  },
+  "bugs": {
+    "url": "https://github.com/SolidRPC/rpc-xray/issues"
+  },
+  "homepage": "https://github.com/SolidRPC/rpc-xray#readme",
+  "keywords": [
+    "ethereum",
+    "evm",
+    "json-rpc",
+    "rpc",
+    "monitoring",
+    "prometheus",
+    "observability",
+    "web3"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --target node20 --clean",
+    "check": "npm run format:check && npm run typecheck && npm test && npm run build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "ethers": "^6.15.0",
+    "prettier": "^3.9.6",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.2",
+    "viem": "^2.37.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

@@ -1,0 +1,32 @@
+route:
+  receiver: rpc-xray-slack
+  group_by: [alertname, chain, provider]
+  group_wait: 10s
+  group_interval: 2m
+  repeat_interval: 4h
+  routes:
+    - matchers:
+        - rpc_xray="offer"
+      receiver: rpc-xray-offer
+      group_wait: 30s
+      repeat_interval: 720h
+
+receivers:
+  - name: rpc-xray-slack
+    slack_configs:
+      - api_url_file: /tmp/slack_url
+        send_resolved: true
+        color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+        title: '{{ if eq .Status "firing" }}RPC incident: {{ .CommonAnnotations.summary }}{{ else }}Resolved: {{ or .CommonAnnotations.incident .CommonLabels.alertname }} on {{ .CommonLabels.chain }}, {{ .CommonLabels.provider }}{{ end }}'
+        text: >-
+          {{ if eq .Status "firing" }}{{ .CommonAnnotations.description }}{{ else }}Lasted
+          {{ with index .Alerts 0 }}{{ .EndsAt.Sub .StartsAt }}{{ end }}.{{ end }}
+        footer: rpc-xray
+  - name: rpc-xray-offer
+    slack_configs:
+      - api_url_file: /tmp/slack_url
+        send_resolved: false
+        color: "#7c3aed"
+        title: "{{ .CommonAnnotations.summary }}"
+        text: "{{ .CommonAnnotations.description }}"
+        footer: rpc-xray

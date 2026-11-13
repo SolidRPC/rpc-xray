@@ -1,0 +1,188 @@
+[
+  {
+    "name": "plain success",
+    "request": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_blockNumber\",\"params\":[]}",
+    "status": 200,
+    "response": "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":\"0x10\"}",
+    "expected": [{ "method": "eth_blockNumber", "outcome": "ok" }]
+  },
+  {
+    "name": "null result is a valid answer",
+    "request": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_getTransactionReceipt\",\"params\":[\"0x00\"]}",
+    "status": 200,
+    "response": "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":null}",
+    "expected": [{ "method": "eth_getTransactionReceipt", "outcome": "ok" }]
+  },
+  {
+    "name": "empty log list is a valid answer",
+    "request": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_getLogs\",\"params\":[{}]}",
+    "status": 200,
+    "response": "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":[]}",
+    "expected": [{ "method": "eth_getLogs", "outcome": "ok" }]
+  },
+  {
+    "name": "http 500",
+    "request": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_call\",\"params\":[]}",
+    "status": 500,
+    "response": "Internal Server Error",
+    "expected": [{ "method": "eth_call", "outcome": "http_error" }]
+  },
+  {
+    "name": "http 403",
+    "request": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_call\",\"params\":[]}",
+    "status": 403,
+    "response": "{\"error\":\"forbidden\"}",
+    "expected": [{ "method": "eth_call", "outcome": "http_error" }]
+  },
+  {
+    "name": "http 429",
+    "request": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_call\",\"params\":[]}",
+    "status": 429,
+    "response": "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":429,\"message\":\"Too Many Requests\"}}",
+    "expected": [{ "method": "eth_call", "outcome": "rate_limited" }]
+  },
+  {
+    "name": "rate limit reported at http 200",
+    "request": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_call\",\"params\":[]}",
+    "status": 200,
+    "response": "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32005,\"message\":\"Rate limit exceeded\"}}",
+    "expected": [{ "method": "eth_call", "outcome": "rate_limited" }]
+  },
+  {
+    "name": "provider fault at http 200",
+    "request": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_getBalance\",\"params\":[]}",
+    "status": 200,
+    "response": "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32000,\"message\":\"header not found\"}}",
+    "expected": [{ "method": "eth_getBalance", "outcome": "rpc_error" }]
+  },
+  {
+    "name": "internal error at http 200",
+    "request": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_getBalance\",\"params\":[]}",
+    "status": 200,
+    "response": "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32603,\"message\":\"Internal error\"}}",
+    "expected": [{ "method": "eth_getBalance", "outcome": "rpc_error" }]
+  },
+  {
+    "name": "revert by code",
+    "request": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_call\",\"params\":[]}",
+    "status": 200,
+    "response": "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":3,\"message\":\"execution reverted: nope\",\"data\":\"0x\"}}",
+    "expected": [{ "method": "eth_call", "outcome": "caller_error" }]
+  },
+  {
+    "name": "revert by message",
+    "request": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_estimateGas\",\"params\":[]}",
+    "status": 200,
+    "response": "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32000,\"message\":\"Execution reverted\"}}",
+    "expected": [{ "method": "eth_estimateGas", "outcome": "caller_error" }]
+  },
+  {
+    "name": "invalid params",
+    "request": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_getBalance\",\"params\":[\"nope\"]}",
+    "status": 200,
+    "response": "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32602,\"message\":\"invalid argument 0\"}}",
+    "expected": [{ "method": "eth_getBalance", "outcome": "caller_error" }]
+  },
+  {
+    "name": "rejected transaction",
+    "request": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_sendRawTransaction\",\"params\":[\"0x\"]}",
+    "status": 200,
+    "response": "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32000,\"message\":\"nonce too low: next nonce 5, tx nonce 4\"}}",
+    "expected": [{ "method": "eth_sendRawTransaction", "outcome": "caller_error" }]
+  },
+  {
+    "name": "unknown method name is folded into other",
+    "request": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"vendor_customThing\",\"params\":[]}",
+    "status": 200,
+    "response": "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":true}",
+    "expected": [{ "method": "other", "outcome": "ok" }]
+  },
+  {
+    "name": "html page at http 200",
+    "request": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_call\",\"params\":[]}",
+    "status": 200,
+    "response": "<html><body>Bad gateway</body></html>",
+    "expected": [{ "method": "eth_call", "outcome": "rpc_error" }]
+  },
+  {
+    "name": "empty body at http 200",
+    "request": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_call\",\"params\":[]}",
+    "status": 200,
+    "response": "",
+    "expected": [{ "method": "eth_call", "outcome": "rpc_error" }]
+  },
+  {
+    "name": "body not inspected",
+    "request": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_getLogs\",\"params\":[{}]}",
+    "status": 200,
+    "response": null,
+    "expected": [{ "method": "eth_getLogs", "outcome": "ok" }]
+  },
+  {
+    "name": "timeout",
+    "request": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_call\",\"params\":[]}",
+    "failure": "timeout",
+    "expected": [{ "method": "eth_call", "outcome": "timeout" }]
+  },
+  {
+    "name": "network failure",
+    "request": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_call\",\"params\":[]}",
+    "failure": "network",
+    "expected": [{ "method": "eth_call", "outcome": "network" }]
+  },
+  {
+    "name": "batch with mixed outcomes",
+    "request": "[{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_blockNumber\"},{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"eth_call\"},{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"eth_getBalance\"}]",
+    "status": 200,
+    "response": "[{\"jsonrpc\":\"2.0\",\"id\":2,\"error\":{\"code\":3,\"message\":\"execution reverted\"}},{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":\"0x1\"},{\"jsonrpc\":\"2.0\",\"id\":3,\"error\":{\"code\":-32000,\"message\":\"missing trie node\"}}]",
+    "expected": [
+      { "method": "eth_blockNumber", "outcome": "ok" },
+      { "method": "eth_call", "outcome": "caller_error" },
+      { "method": "eth_getBalance", "outcome": "rpc_error" }
+    ]
+  },
+  {
+    "name": "batch with a missing response entry",
+    "request": "[{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_blockNumber\"},{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"eth_chainId\"}]",
+    "status": 200,
+    "response": "[{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":\"0x1\"}]",
+    "expected": [
+      { "method": "eth_blockNumber", "outcome": "ok" },
+      { "method": "eth_chainId", "outcome": "rpc_error" }
+    ]
+  },
+  {
+    "name": "batch answered with a single error object",
+    "request": "[{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_blockNumber\"},{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"eth_chainId\"}]",
+    "status": 200,
+    "response": "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32000,\"message\":\"batch too large\"}}",
+    "expected": [
+      { "method": "eth_blockNumber", "outcome": "rpc_error" },
+      { "method": "eth_chainId", "outcome": "rpc_error" }
+    ]
+  },
+  {
+    "name": "batch rejected with http 503",
+    "request": "[{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_blockNumber\"},{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"eth_chainId\"}]",
+    "status": 503,
+    "response": "",
+    "expected": [
+      { "method": "eth_blockNumber", "outcome": "http_error" },
+      { "method": "eth_chainId", "outcome": "http_error" }
+    ]
+  },
+  {
+    "name": "not json-rpc is not recorded",
+    "request": "{\"query\":\"{ pairs { id } }\"}",
+    "status": 200,
+    "response": "{\"data\":{}}",
+    "expected": []
+  },
+  {
+    "name": "not json is not recorded",
+    "request": "hello",
+    "status": 200,
+    "response": "ok",
+    "expected": []
+  }
+]

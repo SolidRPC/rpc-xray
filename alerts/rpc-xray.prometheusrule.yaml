@@ -1,0 +1,137 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rpc-xray
+  labels:
+    app.kubernetes.io/name: rpc-xray
+spec:
+  groups:
+    - name: rpc-xray.recording
+      interval: 30s
+      rules:
+        - record: rpc_xray:requests:rate3m
+          expr: sum by (chain, provider) (rate(rpc_xray_requests_total[3m]))
+        - record: rpc_xray:transport_error_ratio:rate3m
+          expr: |
+            sum by (chain, provider) (rate(rpc_xray_requests_total{outcome=~"http_error|rate_limited|timeout|network"}[3m]))
+              /
+            rpc_xray:requests:rate3m
+        - record: rpc_xray:rpc_error_ratio:rate3m
+          expr: |
+            sum by (chain, provider) (rate(rpc_xray_requests_total{outcome="rpc_error"}[3m]))
+              /
+            rpc_xray:requests:rate3m
+        - record: rpc_xray:latency_seconds:p95_1m
+          expr: |
+            histogram_quantile(0.95, sum by (chain, provider, le) (rate(rpc_xray_request_duration_seconds_bucket[1m])))
+        - record: rpc_xray:head_stale_seconds
+          expr: time() - max by (chain, provider) (rpc_xray_head_last_advance_timestamp_seconds)
+        - record: rpc_xray:chain_blocks_per_second
+          expr: max by (chain) (deriv(rpc_xray_head_block[10m])) > 0
+        - record: rpc_xray:head_lag_seconds
+          expr: |
+            max by (chain, provider) (rpc_xray_head_lag_blocks)
+              / on (chain) group_left ()
+            rpc_xray:chain_blocks_per_second
+        - record: rpc_xray:failed_requests:rate5m
+          expr: |
+            sum by (chain, provider) (rate(rpc_xray_requests_total{outcome=~"http_error|rate_limited|rpc_error|timeout|network"}[5m]))
+        - record: rpc_xray:success_ratio:rate1h
+          expr: |
+            1 - (
+              sum by (chain, provider) (rate(rpc_xray_requests_total{outcome=~"http_error|rate_limited|rpc_error|timeout|network"}[1h]))
+                /
+              sum by (chain, provider) (rate(rpc_xray_requests_total[1h]))
+            )
+  
+    - name: rpc-xray.incidents
+      rules:
+        - alert: RpcXrayStale
+          expr: time() - max by (chain, provider) (rpc_xray_head_last_advance_timestamp_seconds) > 180
+          labels:
+            severity: critical
+            rpc_xray: incident
+          annotations:
+            incident: "Stale head"
+            summary: "{{ $labels.chain }}: no new block from {{ $labels.provider }} for {{ $value | humanizeDuration }}"
+            description: "The head reported by {{ $labels.provider }} has not advanced. Every read from this endpoint returns old state. Check the provider status page, then move traffic to another source."
+  
+        - alert: RpcXrayLagging
+          expr: rpc_xray:head_lag_seconds > 10
+          for: 3m
+          labels:
+            severity: warning
+            rpc_xray: incident
+          annotations:
+            incident: "Lagging head"
+            summary: "{{ $labels.chain }}: {{ $labels.provider }} is {{ $value | humanizeDuration }} behind the best source"
+            description: "This endpoint keeps answering, but with blocks older than another source already has. Users see stale balances and missed events."
+  
+        - alert: RpcXrayHttpErrors
+          expr: rpc_xray:transport_error_ratio:rate3m > 0.05 and rpc_xray:requests:rate3m > 0.1
+          for: 1m
+          labels:
+            severity: critical
+            rpc_xray: incident
+          annotations:
+            incident: "Failing requests"
+            summary: "{{ $labels.chain }}: {{ $value | humanizePercentage }} of requests to {{ $labels.provider }} failed"
+            description: "More than 5% of requests over 3 minutes returned HTTP 4xx or 5xx, were rate limited, timed out or never connected."
+  
+        - alert: RpcXrayRpcErrors
+          expr: rpc_xray:rpc_error_ratio:rate3m > 0.05 and rpc_xray:requests:rate3m > 0.1
+          for: 1m
+          labels:
+            severity: critical
+            rpc_xray: incident
+          annotations:
+            incident: "Errors at HTTP 200"
+            summary: "{{ $labels.chain }}: {{ $value | humanizePercentage }} of answers from {{ $labels.provider }} were errors at HTTP 200"
+            description: "More than 5% of requests over 3 minutes returned HTTP 200 with a JSON-RPC error that is the provider's fault. Reverts and invalid requests are not counted."
+  
+        - alert: RpcXraySlow
+          expr: rpc_xray:latency_seconds:p95_1m > 1 and rpc_xray:requests:rate3m > 0.1
+          for: 3m
+          labels:
+            severity: warning
+            rpc_xray: incident
+          annotations:
+            incident: "Slow answers"
+            summary: "{{ $labels.chain }}: p95 latency on {{ $labels.provider }} is {{ $value | humanizeDuration }}"
+            description: "One request in twenty has taken longer than 1 second for 3 minutes."
+  
+  
+        - record: rpc_xray:incident_any
+          expr: |
+            clamp_max(count(ALERTS{alertstate="firing", rpc_xray="incident"}), 1) or vector(0)
+  
+    - name: rpc-xray.rollup
+      interval: 5m
+      rules:
+        - record: rpc_xray:requests:rate5m_total
+          expr: sum(rate(rpc_xray_requests_total[5m]))
+        - record: rpc_xray:failed_requests:rate5m_total
+          expr: sum(rpc_xray:failed_requests:rate5m) or vector(0)
+        - record: rpc_xray:slow_seconds:rate5m_total
+          expr: sum(rate(rpc_xray_slow_seconds_total[5m])) or vector(0)
+        - record: rpc_xray:incident_any:max5m
+          expr: max_over_time(rpc_xray:incident_any[5m])
+        - record: rpc_xray:monthly_requests:projected
+          expr: sum_over_time(rpc_xray:requests:rate5m_total[7d]) * 300 * 30 / 7
+        - record: rpc_xray:incident_minutes:7d
+          expr: sum_over_time(rpc_xray:incident_any:max5m[7d]) * 5
+  
+    - name: rpc-xray.offer
+      rules:
+        - alert: RpcXrayTrialOffer
+          expr: |
+            (rpc_xray:monthly_requests:projected >= 100e6)
+              and on () (rpc_xray:incident_minutes:7d > 0)
+              and on () (max(rpc_xray_offers_enabled) == 1)
+          for: 1h
+          labels:
+            severity: info
+            rpc_xray: offer
+          annotations:
+            summary: "You send about {{ $value | humanize }} RPC requests a month and had incidents this week"
+            description: "SolidRPC offers a 14-day free trial or $100 credit. Email hello@solidrpc.io and mention rpc-xray. Set offers: false in rpc-xray to stop this message."

@@ -1,0 +1,37 @@
+const NAMES: Record<number, string> = {
+  1: "ethereum",
+  10: "optimism",
+  25: "cronos",
+  56: "bsc",
+  100: "gnosis",
+  130: "unichain",
+  137: "polygon",
+  146: "sonic",
+  250: "fantom",
+  324: "zksync",
+  480: "world-chain",
+  999: "hyperevm",
+  1101: "polygon-zkevm",
+  1329: "sei",
+  4663: "robinhood",
+  5000: "mantle",
+  8453: "base",
+  34443: "mode",
+  42161: "arbitrum",
+  42220: "celo",
+  43114: "avalanche",
+  57073: "ink",
+  59144: "linea",
+  80094: "berachain",
+  81457: "blast",
+  534352: "scroll",
+  7777777: "zora",
+  11155111: "sepolia",
+  84532: "base-sepolia",
+  421614: "arbitrum-sepolia",
+  11155420: "optimism-sepolia",
+};
+
+export function chainLabel(chainId: number): string {
+  return NAMES[chainId] ?? `eip155:${chainId}`;
+}

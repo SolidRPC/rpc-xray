@@ -1,0 +1,149 @@
+rule_files:
+  - ../rpc-xray.rules.yml
+
+evaluation_interval: 30s
+
+tests:
+  - name: stale head opens an incident after 3 minutes and a moving head does not
+    interval: 30s
+    input_series:
+      - series: 'rpc_xray_head_last_advance_timestamp_seconds{chain="ethereum", provider="a.example", instance="app-1"}'
+        values: "0x20"
+      - series: 'rpc_xray_head_last_advance_timestamp_seconds{chain="ethereum", provider="b.example", instance="app-1"}'
+        values: "0+30x20"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: RpcXrayStale
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: RpcXrayStale
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              rpc_xray: incident
+              chain: ethereum
+              provider: a.example
+            exp_annotations:
+              incident: "Stale head"
+              summary: "ethereum: no new block from a.example for 4m 0s"
+              description: "The head reported by a.example has not advanced. Every read from this endpoint returns old state. Check the provider status page, then move traffic to another source."
+
+  - name: an endpoint more than 10 seconds of blocks behind is lagging
+    interval: 30s
+    input_series:
+      - series: 'rpc_xray_head_block{chain="base", provider="a.example"}'
+        values: "1000+15x60"
+      - series: 'rpc_xray_head_block{chain="base", provider="b.example"}'
+        values: "990+15x60"
+      - series: 'rpc_xray_head_lag_blocks{chain="base", provider="a.example"}'
+        values: "0x60"
+      - series: 'rpc_xray_head_lag_blocks{chain="base", provider="b.example"}'
+        values: "10x60"
+    promql_expr_test:
+      - expr: rpc_xray:head_lag_seconds{provider="b.example"}
+        eval_time: 15m
+        exp_samples:
+          - labels: 'rpc_xray:head_lag_seconds{chain="base", provider="b.example"}'
+            value: 20
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: RpcXrayLagging
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              rpc_xray: incident
+              chain: base
+              provider: b.example
+            exp_annotations:
+              incident: "Lagging head"
+              summary: "base: b.example is 20s behind the best source"
+              description: "This endpoint keeps answering, but with blocks older than another source already has. Users see stale balances and missed events."
+
+  - name: transport failures above 5 percent open an incident, reverts never do
+    interval: 30s
+    input_series:
+      - series: 'rpc_xray_requests_total{chain="ethereum", provider="a.example", method="eth_call", outcome="ok"}'
+        values: "0+270x20"
+      - series: 'rpc_xray_requests_total{chain="ethereum", provider="a.example", method="eth_call", outcome="http_error"}'
+        values: "0+15x20"
+      - series: 'rpc_xray_requests_total{chain="ethereum", provider="a.example", method="eth_call", outcome="rate_limited"}'
+        values: "0+15x20"
+      - series: 'rpc_xray_requests_total{chain="ethereum", provider="b.example", method="eth_call", outcome="ok"}'
+        values: "0+150x20"
+      - series: 'rpc_xray_requests_total{chain="ethereum", provider="b.example", method="eth_call", outcome="caller_error"}'
+        values: "0+150x20"
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: RpcXrayHttpErrors
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              rpc_xray: incident
+              chain: ethereum
+              provider: a.example
+            exp_annotations:
+              incident: "Failing requests"
+              summary: "ethereum: 10% of requests to a.example failed"
+              description: "More than 5% of requests over 3 minutes returned HTTP 4xx or 5xx, were rate limited, timed out or never connected."
+      - eval_time: 6m
+        alertname: RpcXrayRpcErrors
+        exp_alerts: []
+
+  - name: provider errors at http 200 open an incident
+    interval: 30s
+    input_series:
+      - series: 'rpc_xray_requests_total{chain="polygon", provider="a.example", method="eth_getLogs", outcome="ok"}'
+        values: "0+90x20"
+      - series: 'rpc_xray_requests_total{chain="polygon", provider="a.example", method="eth_getLogs", outcome="rpc_error"}'
+        values: "0+10x20"
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: RpcXrayRpcErrors
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              rpc_xray: incident
+              chain: polygon
+              provider: a.example
+            exp_annotations:
+              incident: "Errors at HTTP 200"
+              summary: "polygon: 10% of answers from a.example were errors at HTTP 200"
+              description: "More than 5% of requests over 3 minutes returned HTTP 200 with a JSON-RPC error that is the provider's fault. Reverts and invalid requests are not counted."
+
+  - name: a high error ratio on almost no traffic stays quiet
+    interval: 30s
+    input_series:
+      - series: 'rpc_xray_requests_total{chain="ethereum", provider="a.example", method="eth_call", outcome="http_error"}'
+        values: "0+1x20"
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: RpcXrayHttpErrors
+        exp_alerts: []
+
+  - name: p95 above one second for three minutes is slow
+    interval: 30s
+    input_series:
+      - series: 'rpc_xray_requests_total{chain="bsc", provider="a.example", method="eth_call", outcome="ok"}'
+        values: "0+100x20"
+      - series: 'rpc_xray_request_duration_seconds_bucket{chain="bsc", provider="a.example", method="eth_call", le="1"}'
+        values: "0+80x20"
+      - series: 'rpc_xray_request_duration_seconds_bucket{chain="bsc", provider="a.example", method="eth_call", le="2.5"}'
+        values: "0+100x20"
+      - series: 'rpc_xray_request_duration_seconds_bucket{chain="bsc", provider="a.example", method="eth_call", le="+Inf"}'
+        values: "0+100x20"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: RpcXraySlow
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: RpcXraySlow
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              rpc_xray: incident
+              chain: bsc
+              provider: a.example
+            exp_annotations:
+              incident: "Slow answers"
+              summary: "bsc: p95 latency on a.example is 2.125s"
+              description: "One request in twenty has taken longer than 1 second for 3 minutes."
