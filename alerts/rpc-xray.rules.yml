@@ -29,10 +29,14 @@ groups:
       - record: rpc_xray:failed_requests:rate5m
         expr: |
           sum by (chain, provider) (rate(rpc_xray_requests_total{outcome=~"http_error|rate_limited|rpc_error|timeout|network"}[5m]))
+            or on (chain, provider)
+          (0 * sum by (chain, provider) (rate(rpc_xray_requests_total[5m])))
       - record: rpc_xray:success_ratio:rate1h
         expr: |
           1 - (
-            sum by (chain, provider) (rate(rpc_xray_requests_total{outcome=~"http_error|rate_limited|rpc_error|timeout|network"}[1h]))
+            (sum by (chain, provider) (rate(rpc_xray_requests_total{outcome=~"http_error|rate_limited|rpc_error|timeout|network"}[1h]))
+              or on (chain, provider)
+            (0 * sum by (chain, provider) (rate(rpc_xray_requests_total[1h]))))
               /
             sum by (chain, provider) (rate(rpc_xray_requests_total[1h]))
           )
@@ -104,9 +108,9 @@ groups:
       - record: rpc_xray:requests:rate5m_total
         expr: sum(rate(rpc_xray_requests_total[5m]))
       - record: rpc_xray:failed_requests:rate5m_total
-        expr: sum(rpc_xray:failed_requests:rate5m) or vector(0)
+        expr: sum(rpc_xray:failed_requests:rate5m)
       - record: rpc_xray:slow_seconds:rate5m_total
-        expr: sum(rate(rpc_xray_slow_seconds_total[5m])) or vector(0)
+        expr: sum(rate(rpc_xray_slow_seconds_total[5m])) or (0 * sum(rate(rpc_xray_requests_total[5m])))
       - record: rpc_xray:incident_any:max5m
         expr: max_over_time(rpc_xray:incident_any[5m])
       - record: rpc_xray:monthly_requests:projected

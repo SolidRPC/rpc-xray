@@ -3,6 +3,12 @@ rule_files:
 
 evaluation_interval: 5m
 
+group_eval_order:
+  - rpc-xray.recording
+  - rpc-xray.incidents
+  - rpc-xray.rollup
+  - rpc-xray.offer
+
 tests:
   - name: the offer needs volume, an incident, and offers enabled
     interval: 1m

@@ -9,6 +9,7 @@ RED = "#e5484d"
 GREEN = "#30a46c"
 AMBER = "#f5a524"
 VIOLET = "#7c3aed"
+NEUTRAL = "#747c89"
 
 panels = []
 next_id = [1]
@@ -62,6 +63,7 @@ def stat(title, description, targets, unit, overrides=None, decimals=None, mappi
             "textMode": "value_and_name",
             "justifyMode": "center",
             "orientation": "vertical",
+            "text": {"valueSize": 26, "titleSize": 12},
         },
     }
 
@@ -124,20 +126,23 @@ def threshold_override(name, steps):
 
 TARGET_LINE = [{"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [8, 6]}}, {"id": "custom.fillOpacity", "value": 0}]
 
-you_success = f"1 - sum(increase(rpc_xray_requests_total{{{SEL}, {FAILED}}}[$__range])) / sum(increase(rpc_xray_requests_total{{{SEL}}}[$__range]))"
-you_p95 = f"histogram_quantile(0.95, sum by (le) (increase(rpc_xray_request_duration_seconds_bucket{{{SEL}}}[$__range])))"
-failed_range = f"sum(increase(rpc_xray_requests_total{{{SEL}, {FAILED}}}[$__range])) or vector(0)"
 total_range = f"sum(increase(rpc_xray_requests_total{{{SEL}}}[$__range]))"
+failed_range = f"(sum(increase(rpc_xray_requests_total{{{SEL}, {FAILED}}}[$__range])) or (0 * {total_range}))"
+you_success = f"1 - {failed_range} / {total_range}"
+you_p95 = f"histogram_quantile(0.95, sum by (le) (increase(rpc_xray_request_duration_seconds_bucket{{{SEL}}}[$__range])))"
+unknown = [{"type": "special", "options": {"match": "null", "result": {"text": "No data", "color": NEUTRAL}}}, {"type": "special", "options": {"match": "nan", "result": {"text": "No traffic", "color": NEUTRAL}}}]
 
-row("Where you are, and where you should be", 0)
+row("Measured traffic and configured targets", 0)
 add(
     stat(
         "Success rate",
         "Share of your real RPC requests that got a usable answer in the selected time range. Reverts and invalid requests are your own results and are not counted as failures.",
-        [target(you_success, "You", "A", True), target("vector($target_success)", "Should be", "B", True)],
+        [target(you_success, "You", "A", True), target("vector($target_success)", "Configured target", "B", True)],
         "percentunit",
-        [override("Should be", GREEN), threshold_override("You", [(RED, None), (GREEN, 0.9999)])],
+        [override("Configured target", VIOLET), threshold_override("You", [(RED, None), (GREEN, 0.9999)])],
         decimals=2,
+        mappings=unknown,
+        no_value="No data",
     ),
     0, 1, 6, 6,
 )
@@ -145,10 +150,12 @@ add(
     stat(
         "p95 latency",
         "One request in twenty was slower than this in the selected time range.",
-        [target(you_p95, "You", "A", True), target("vector($target_p95)", "Should be", "B", True)],
+        [target(you_p95, "You", "A", True), target("vector($target_p95)", "Configured target", "B", True)],
         "s",
-        [override("Should be", GREEN), threshold_override("You", [(GREEN, None), (RED, 0.3)])],
+        [override("Configured target", VIOLET), threshold_override("You", [(GREEN, None), (RED, 0.3)])],
         decimals=2,
+        mappings=unknown,
+        no_value="No data",
     ),
     6, 1, 6, 6,
 )
@@ -158,10 +165,10 @@ add(
         "Minutes in the selected time range when at least one RPC incident was open: a stale head, a lagging head, failing requests or slow answers.",
         [
             target("sum_over_time(rpc_xray:incident_any:max5m[$__range]) * 5 or vector(0)", "You", "A", True),
-            target("vector(0)", "Should be", "B", True),
+            target("vector(0)", "Configured target", "B", True),
         ],
         "m",
-        [override("Should be", GREEN), threshold_override("You", [(GREEN, None), (RED, 1)])],
+        [override("Configured target", VIOLET), threshold_override("You", [(GREEN, None), (RED, 1)])],
         decimals=0,
     ),
     12, 1, 6, 6,
@@ -169,14 +176,16 @@ add(
 add(
     stat(
         "Worst head lag right now",
-        "How far the slowest endpoint is behind the best source of the same chain. Users of a lagging endpoint see old balances and miss events.",
+        "How far the slowest endpoint is behind the best source of the same chain. Not measured when probes are disabled or have not established a moving head. A zero from one endpoint alone cannot establish freshness.",
         [
-            target(f"max(rpc_xray:head_lag_seconds{{{SEL}}}) or vector(0)", "You", "A", True),
-            target("vector(0)", "Should be", "B", True),
+            target(f"max(rpc_xray:head_lag_seconds{{{SEL}}})", "You", "A", True),
         ],
         "s",
-        [override("Should be", GREEN), threshold_override("You", [(GREEN, None), (RED, 1)])],
+        [threshold_override("You", [(GREEN, None), (RED, 1)])],
         decimals=0,
+        no_value="Not measured",
+        base_color=NEUTRAL,
+        mappings=[{"type": "special", "options": {"match": "null", "result": {"text": "Not measured", "color": NEUTRAL}}}],
     ),
     18, 1, 6, 6,
 )
@@ -185,14 +194,14 @@ row("What waiting has cost so far", 7)
 add(
     series(
         "Failed user requests, adding up",
-        "Every failed request since the start of the selected time range. The red line only climbs. The green line is how many failures the same traffic would have had at the target success rate.",
+        "Every failed request since the start of the selected time range. The red line only climbs. The violet line is how many failures the same traffic would have had at the configured target success rate.",
         [
-            target(f"sum(increase(rpc_xray_requests_total{{{SEL}, {FAILED}}}[$__interval])) or vector(0)", "failed", "A"),
+            target(f"sum(increase(rpc_xray_requests_total{{{SEL}, {FAILED}}}[$__interval])) or (0 * sum(increase(rpc_xray_requests_total{{{SEL}}}[$__interval])))", "failed", "A"),
             target(f"sum(increase(rpc_xray_requests_total{{{SEL}}}[$__interval])) * (1 - $target_success)", "target", "B"),
         ],
         "short",
-        [override("Failed user requests", RED), override("Where you should be", GREEN, TARGET_LINE)],
-        transformations=cumulative({"failed": "Failed user requests", "target": "Where you should be"}),
+        [override("Failed user requests", RED), override("Configured target", VIOLET, TARGET_LINE)],
+        transformations=cumulative({"failed": "Failed user requests", "target": "Configured target"}),
         fill=18,
         minimum=0,
     )
@@ -205,7 +214,9 @@ add(
         "Requests in the selected time range that returned an HTTP error, were rate limited, timed out, never connected, or came back with a provider error at HTTP 200.",
         [target(failed_range, "Failed", "A", True)],
         "short",
+        [threshold_override("Failed", [(GREEN, None), (RED, 0.000001)])],
         decimals=0,
+        no_value="No data",
     ),
     14, 8, 5, 3,
 )
@@ -213,9 +224,11 @@ add(
     stat(
         "Time users waited beyond 1 s",
         "Total waiting time above one second per request in the selected time range.",
-        [target(f"sum(increase(rpc_xray_slow_seconds_total{{{SEL}}}[$__range])) or vector(0)", "Waited", "A", True)],
+        [target(f"sum(increase(rpc_xray_slow_seconds_total{{{SEL}}}[$__range])) or (0 * {total_range})", "Waited", "A", True)],
         "s",
+        [threshold_override("Waited", [(GREEN, None), (RED, 0.000001)])],
         decimals=0,
+        no_value="No data",
     ),
     19, 8, 5, 3,
 )
@@ -226,7 +239,8 @@ add(
         [target(f"({failed_range}) * on () max(rpc_xray_value_per_request_usd)", "Lost", "A", True)],
         "currencyUSD",
         decimals=0,
-        no_value="Set valuePerRequest",
+        no_value="Not configured",
+        base_color=NEUTRAL,
     ),
     14, 11, 5, 3,
 )
@@ -241,6 +255,8 @@ add(
         "short",
         [override("Last week", AMBER)],
         decimals=0,
+        no_value="Collecting history",
+        base_color=NEUTRAL,
     ),
     19, 11, 5, 3,
 )
@@ -254,6 +270,8 @@ add(
         ],
         "short",
         decimals=0,
+        no_value="Collecting history",
+        base_color=NEUTRAL,
     ),
     14, 14, 10, 3,
 )
@@ -263,13 +281,13 @@ add(
     {
         "type": "state-timeline",
         "title": "Open incidents",
-        "description": "Each bar is an incident that would have paged someone.",
-        "targets": [target('max by (alertname, chain, provider) (ALERTS{alertstate="firing", rpc_xray="incident", ' + SEL + "})", "{{alertname}} {{chain}} {{provider}}", "A")],
+        "description": "Firing alert rules over time. No open incidents is an alert state, not proof that traffic or head measurements are available.",
+        "targets": [target('max by (alertname, chain, provider) (ALERTS{alertstate="firing", rpc_xray="incident", ' + SEL + '}) or on () label_replace(vector(0), "alertname", "No open incidents", "__name__", ".*")', "{{alertname}} {{chain}} {{provider}}", "A")],
         "fieldConfig": {
             "defaults": {
                 "color": {"mode": "fixed", "fixedColor": RED},
                 "custom": {"fillOpacity": 85, "lineWidth": 0, "spanNulls": False},
-                "mappings": [{"type": "value", "options": {"1": {"text": "open", "color": RED}}}],
+                "mappings": [{"type": "value", "options": {"0": {"text": "No open incidents", "color": NEUTRAL}, "1": {"text": "Open", "color": RED}}}],
             },
             "overrides": [],
         },
@@ -285,7 +303,7 @@ add(
         "none",
         [override("Offer", VIOLET)],
         mappings=[{"type": "value", "options": {"1": {"text": "14-day free trial or $100 credit. Email hello@solidrpc.io", "color": VIOLET}}}],
-        no_value="Not eligible yet",
+        no_value="No active offer",
         base_color="#747c89",
     ),
     16, 18, 8, 7,
@@ -298,10 +316,10 @@ add(
         "Hourly success rate per endpoint, against the target.",
         [
             target(f"rpc_xray:success_ratio:rate1h{{{SEL}}}", "{{chain}} {{provider}}", "A"),
-            target("vector($target_success)", "Where you should be", "B"),
+            target("vector($target_success)", "Configured target", "B"),
         ],
         "percentunit",
-        [override("Where you should be", GREEN, TARGET_LINE)],
+        [override("Configured target", VIOLET, TARGET_LINE)],
         fill=0,
         maximum=1,
     ),
@@ -310,14 +328,14 @@ add(
 add(
     series(
         "p95 latency by provider",
-        "The dashed red line is the 1 second incident threshold. The green line is the target.",
+        "The dashed red line is the 1 second incident threshold. The violet line is the configured target.",
         [
             target(f"rpc_xray:latency_seconds:p95_1m{{{SEL}}}", "{{chain}} {{provider}}", "A"),
             target("vector(1)", "Incident threshold", "B"),
-            target("vector($target_p95)", "Where you should be", "C"),
+            target("vector($target_p95)", "Configured target", "C"),
         ],
         "s",
-        [override("Incident threshold", RED, TARGET_LINE), override("Where you should be", GREEN, TARGET_LINE)],
+        [override("Incident threshold", RED, TARGET_LINE), override("Configured target", VIOLET, TARGET_LINE)],
         fill=0,
         minimum=0,
     ),
@@ -327,7 +345,7 @@ add(
     series(
         "Failed requests per second, by kind",
         "What kind of failure your users hit.",
-        [target(f"sum by (outcome) (rate(rpc_xray_requests_total{{{SEL}, {FAILED}}}[5m]))", "{{outcome}}", "A")],
+        [target(f'sum by (outcome) (rate(rpc_xray_requests_total{{{SEL}, {FAILED}}}[5m])) or on () label_replace(0 * sum(rate(rpc_xray_requests_total{{{SEL}}}[5m])), "outcome", "No failures", "__name__", ".*")', "{{outcome}}", "A")],
         "reqps",
         fill=30,
         stack=True,
@@ -338,10 +356,10 @@ add(
 add(
     series(
         "Seconds since the last new block",
-        "A flat rising line means the endpoint stopped producing new blocks. The dashed line is the 3 minute incident threshold.",
+        "A rising line means no new block has been observed. Requires head probes. No data means unmeasured, including when probeIntervalSeconds is 0. The dashed line is the 3 minute incident threshold.",
         [
             target(f"rpc_xray:head_stale_seconds{{{SEL}}}", "{{chain}} {{provider}}", "A"),
-            target("vector(180)", "Incident threshold", "B"),
+            target(f"vector(180) and on () rpc_xray:head_stale_seconds{{{SEL}}}", "Incident threshold", "B"),
         ],
         "s",
         [override("Incident threshold", RED, TARGET_LINE)],
