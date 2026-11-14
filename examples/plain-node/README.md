@@ -1,26 +1,25 @@
 # Plain Node.js with Prometheus
 
-A complete `node:http` app using built-in `fetch`. It reads `eth_blockNumber` from one endpoint at most once per second, serves the latest result at `/`, and exports RPC X-Ray metrics at `/metrics` on the same port. It needs no application dependencies or framework.
+A complete `node:http` app using built-in `fetch`. It reads `eth_blockNumber` from one endpoint at most once per second, serves the latest result at `/`, and exports RPC X-Ray metrics at `/metrics` on the same port. Its only dependency is `@solidrpc/rpc-xray`. It needs no framework.
 
-Use Node.js 20.6 or newer and Docker Compose for Prometheus. Repository access is required while the repository is private. This example imports the locally built package, so it also works before the npm package is published.
+Use Node.js 20.6 or newer and Docker Compose for Prometheus. The app imports `@solidrpc/rpc-xray` by package name, just like an application using the published npm package.
 
-## Build and run
+## Install and run
 
-From the repository root:
+From this example directory, after the package is published:
 
 ```bash
-cd js
-npm ci
-npm run build
-cd ../examples/plain-node
+npm install
 cp .env.example .env
 chmod 600 .env
 ```
 
+Before the first npm release, use the [local package instructions](#test-before-publication) instead of `npm install`, then create `.env` as shown above.
+
 Edit `.env`. Set `RPC_URL` to your complete endpoint and `CHAIN` to its label, such as `ethereum`, `base`, or `bsc`. Keep credentials in this ignored file. The chain label is supplied by you, not validated against the endpoint.
 
 ```bash
-node --env-file=.env server.mjs
+npm start
 ```
 
 In another terminal:
@@ -70,16 +69,31 @@ Stopping Prometheus does not stop the Node.js app. Use Ctrl+C in the app termina
 
 ## Integrate into an existing app
 
-Install the package using the [source installation instructions](../../README.md#install), then change the import in `server.mjs` to `import { Xray } from "@solidrpc/rpc-xray"`. Wrap your existing `fetch` and expose that same instance's `telemetry.metrics()` through your server. Keep the app's existing polling, retry and timeout policy. The polling loop here is sample application behavior, not a requirement of the wrapper.
+Run `npm install @solidrpc/rpc-xray` in your app. The import in `server.mjs` already uses the package name, so it can be copied directly. Wrap your existing `fetch` and expose that same instance's `telemetry.metrics()` through your server. Keep the app's existing polling, retry and timeout policy. The polling loop here is sample application behavior, not a requirement of the wrapper.
 
 The convenience exports `xray()`, `metrics()` and `metricsHandler()` share a default registry. A `new Xray()` instance has its own registry. Do not mix an instance wrapper with the default metrics handler or you will scrape the wrong registry.
 
 ## Test without real RPC traffic
 
-After building `js`, run from the repository root:
+After installing the dependency, run from this example directory:
 
 ```bash
-node --test examples/plain-node/server.test.mjs
+npm test
 ```
 
 The tests use a local mock JSON-RPC server. They verify metrics, request counts, credential omission and shutdown without contacting a blockchain provider.
+
+## Test before publication
+
+For contributors testing an unpublished version, build and install a local npm tarball. From the repository root:
+
+```bash
+cd js
+npm ci
+npm pack
+cd ../examples/plain-node
+npm install --no-save --package-lock=false ../../js/solidrpc-rpc-xray-0.1.0.tgz
+npm test
+```
+
+This exercises the package exports used by npm consumers. It leaves the example's registry dependency unchanged and does not publish anything. Create `.env` and use `npm start` as described above to run the app. CI uses the same packed-package route on Node 20, 22 and 24.

@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { pathToFileURL } from "node:url";
-import { Xray } from "../../js/dist/index.js";
+import { Xray } from "@solidrpc/rpc-xray";
 
 export async function startApp({
   rpcUrl,

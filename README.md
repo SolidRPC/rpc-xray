@@ -10,24 +10,13 @@ Your requests pass through untouched. rpc-xray measures each one, exposes Promet
 
 ## Install
 
-Node.js 20 or newer. The package has no runtime dependencies. The initial `0.1.0` source is available here, but that version is not currently published on npm. While this repository is private, clone access is required.
-
-Build and pack from source:
+Node.js 20 or newer. The package has no runtime dependencies.
 
 ```bash
-git clone https://github.com/SolidRPC/rpc-xray.git
-cd rpc-xray/js
-npm ci
-npm pack
+npm install @solidrpc/rpc-xray
 ```
 
-`npm pack` builds the package and creates `solidrpc-rpc-xray-0.1.0.tgz`, including its license. In your application directory, install that file using its actual path:
-
-```bash
-npm install /absolute/path/to/rpc-xray/js/solidrpc-rpc-xray-0.1.0.tgz
-```
-
-After a version is published, `npm install @solidrpc/rpc-xray` is the registry installation path. An npm 404 can mean that the version is unpublished or inaccessible. Use the source route above instead of assuming the wrapper is broken.
+This is the standard installation path once the package is published. For testing before the first npm release, use the [development instructions](#development-before-publishing).
 
 For an existing viem app:
 
@@ -56,8 +45,9 @@ Integrate RPC X-Ray using https://github.com/SolidRPC/rpc-xray.
 
 1. Read the root and JavaScript READMEs. Find the existing HTTP JSON-RPC
    clients. JavaScript is implemented. Report unsupported languages.
-2. Install with the existing package manager. If npm returns 404, use the
-   documented source build and local tarball. Do not publish a package.
+2. Install @solidrpc/rpc-xray with the existing package manager. If the
+   requested version is not published yet, report that release prerequisite.
+   The documented local tarball is a fallback for pre-release testing.
 3. Wrap the existing HTTP layer without changing URLs, headers, retries,
    timeouts or application call sites. Keep credentials out of code and logs.
 4. Respect the application's request budget. To add zero RPC calls, set
@@ -183,6 +173,27 @@ Everything is optional.
 | `revenuePerHour` | not set | Revenue per hour in USD, exported for your own panels |
 | `offers` | `true` | Show the SolidRPC offer when eligible |
 | `logger` | `console.info` | Where the single offer line is written |
+
+## Development before publishing
+
+These steps are for contributors and pre-release testing. Application integrations use the npm package and import `@solidrpc/rpc-xray`.
+
+Before the first npm release, build a local package from a checkout. Repository access is required while the repository is private:
+
+```bash
+git clone https://github.com/SolidRPC/rpc-xray.git
+cd rpc-xray/js
+npm ci
+npm pack
+```
+
+`npm pack` builds the package and creates `solidrpc-rpc-xray-0.1.0.tgz`, including its license. Install that tarball in a test app using its actual path:
+
+```bash
+npm install --no-save --package-lock=false /absolute/path/to/rpc-xray/js/solidrpc-rpc-xray-0.1.0.tgz
+```
+
+The application import stays `@solidrpc/rpc-xray`. The [plain Node example](examples/plain-node/README.md#test-before-publication) and CI exercise this packaged build without requiring a published release.
 
 ## License
 

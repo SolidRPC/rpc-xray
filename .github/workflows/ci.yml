@@ -26,12 +26,16 @@ jobs:
           cache-dependency-path: js/package-lock.json
       - run: npm ci
       - run: npm run check
-      - run: node --test ../examples/plain-node/server.test.mjs
       - name: Package includes the license
         run: |
           cmp ../LICENSE LICENSE
           npm pack --ignore-scripts
           tar -tf solidrpc-rpc-xray-*.tgz | grep '^package/LICENSE$'
+      - name: Test the Node example against the npm tarball
+        working-directory: examples/plain-node
+        run: |
+          npm install --no-save --package-lock=false ../../js/solidrpc-rpc-xray-0.1.0.tgz
+          npm test
 
   alerts:
     runs-on: ubuntu-latest

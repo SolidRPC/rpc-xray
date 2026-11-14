@@ -8,13 +8,11 @@ Node.js 20 or newer. No runtime dependencies.
 
 ## Install
 
-The initial `0.1.0` version is not currently published on npm. From a clone of this repository, run `npm ci` and `npm pack` in `js`, then install the generated tarball in your app:
-
 ```bash
-npm install /absolute/path/to/rpc-xray/js/solidrpc-rpc-xray-0.1.0.tgz
+npm install @solidrpc/rpc-xray
 ```
 
-See the [source installation instructions](https://github.com/SolidRPC/rpc-xray#install) for cloning and access requirements. Once published, the registry command is `npm install @solidrpc/rpc-xray`.
+This is the standard installation path once the package is published. For pre-release testing, see the [development instructions](https://github.com/SolidRPC/rpc-xray#development-before-publishing). They build a local npm tarball without changing the application's package import.
 
 For a runnable app without a framework, use the [complete plain Node.js example](https://github.com/SolidRPC/rpc-xray/tree/main/examples/plain-node). It includes `/metrics`, a matching Prometheus config, a local mock test and graceful shutdown.
 
