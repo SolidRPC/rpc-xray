@@ -8,7 +8,7 @@ services:
       - --storage.tsdb.retention.time=90d
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./targets.yml:/etc/prometheus/targets.yml:ro
+      - ${RPC_XRAY_TARGETS:-./targets.yml}:/etc/prometheus/targets.yml:ro
       - ../alerts/rpc-xray.rules.yml:/etc/prometheus/rpc-xray.rules.yml:ro
       - prometheus:/prometheus
     extra_hosts:
@@ -21,11 +21,18 @@ services:
     entrypoint:
       - /bin/sh
       - -c
-      - printf %s "$$SLACK_WEBHOOK_URL" > /tmp/slack_url && exec /bin/alertmanager --config.file=/etc/alertmanager/alertmanager.yml --storage.path=/alertmanager
+      - |
+        config=/etc/alertmanager/disabled.yml
+        if [ -n "$$SLACK_WEBHOOK_URL" ]; then
+          printf %s "$$SLACK_WEBHOOK_URL" > /tmp/slack_url
+          config=/etc/alertmanager/alertmanager.yml
+        fi
+        exec /bin/alertmanager --config.file="$$config" --storage.path=/alertmanager
     environment:
-      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-http://127.0.0.1:9/unset}
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
     volumes:
       - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager.disabled.yml:/etc/alertmanager/disabled.yml:ro
       - alertmanager:/alertmanager
     ports:
       - 127.0.0.1:9093:9093

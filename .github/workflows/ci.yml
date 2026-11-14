@@ -26,6 +26,12 @@ jobs:
           cache-dependency-path: js/package-lock.json
       - run: npm ci
       - run: npm run check
+      - run: node --test ../examples/plain-node/server.test.mjs
+      - name: Package includes the license
+        run: |
+          cmp ../LICENSE LICENSE
+          npm pack --ignore-scripts
+          tar -tf solidrpc-rpc-xray-*.tgz | grep '^package/LICENSE$'
 
   alerts:
     runs-on: ubuntu-latest
@@ -36,9 +42,18 @@ jobs:
           curl -sSL https://github.com/prometheus/prometheus/releases/download/v3.0.1/prometheus-3.0.1.linux-amd64.tar.gz | tar xz
           sudo mv prometheus-3.0.1.linux-amd64/promtool /usr/local/bin/
       - run: promtool check rules alerts/rpc-xray.rules.yml
-      - run: promtool test rules alerts/tests/rules_test.yml alerts/tests/offer_test.yml
+      - run: promtool test rules alerts/tests/rules_test.yml alerts/tests/offer_test.yml alerts/tests/healthy_test.yml
       - name: Generated files are current
         run: |
           alerts/build.sh
           python3 dashboards/build.py
           git diff --exit-code
+      - name: Dashboard queries handle healthy, failing and missing data
+        run: |
+          python3 dashboards/test_queries.py > /tmp/dashboard-tests.json
+          promtool test rules /tmp/dashboard-tests.json
+      - name: Compose configurations are valid
+        run: |
+          docker compose -f stack/docker-compose.yml config --quiet
+          RPC_XRAY_TARGETS=./targets.demo.yml docker compose -f stack/docker-compose.yml --profile demo config --quiet
+          docker compose -f examples/plain-node/compose.yml config --quiet

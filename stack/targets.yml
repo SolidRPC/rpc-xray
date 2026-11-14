@@ -1,3 +1,2 @@
 - targets:
     - host.docker.internal:9464
-    - demo:9464
