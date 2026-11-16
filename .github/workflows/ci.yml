@@ -102,6 +102,25 @@ jobs:
           cd ../..
           python3 scripts/test-example.py go
 
+  go-ethereum:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - name: Test and build the go-ethereum integration
+        working-directory: examples/go-ethereum
+        run: |
+          test -z "$(gofmt -l .)"
+          go test -race ./...
+          go vet ./...
+          mkdir -p ../../tmp
+          go build -o ../../tmp/rpc-xray-go-ethereum .
+      - name: Test the running go-ethereum app
+        run: python3 scripts/test-example.py go-ethereum
+
   rust:
     runs-on: ubuntu-latest
     steps:
@@ -114,6 +133,7 @@ jobs:
           workspaces: |
             rust
             examples/plain-rust
+            examples/alloy
       - name: Test SDK and package
         working-directory: rust
         env:
@@ -122,14 +142,20 @@ jobs:
           cargo fmt --check
           cargo test --locked --all-features
           cargo test --locked --no-default-features
+          cargo test --locked --no-default-features --features alloy
           cargo clippy --locked --all-targets --all-features -- -D warnings
-          cargo package --locked
+          cargo package --locked --all-features
       - name: Build and test the complete example
         run: |
           python3 scripts/check-metrics.py /tmp/rust-metrics.txt
           cargo fmt --manifest-path examples/plain-rust/Cargo.toml --check
           cargo build --locked --manifest-path examples/plain-rust/Cargo.toml
           python3 scripts/test-example.py rust
+      - name: Build and test the Alloy integration
+        run: |
+          cargo fmt --manifest-path examples/alloy/Cargo.toml --check
+          cargo build --locked --manifest-path examples/alloy/Cargo.toml
+          python3 scripts/test-example.py alloy
       - uses: actions/upload-artifact@v4
         with:
           name: rust-package
@@ -170,10 +196,10 @@ jobs:
           docker compose -f stack/docker-compose.yml config --quiet
           RPC_XRAY_TARGETS=./targets.demo.yml docker compose -f stack/docker-compose.yml --profile demo config --quiet
           docker compose -f examples/plain-node/compose.yml config --quiet
-          for lang in python go rust; do
-            docker compose -f "examples/plain-$lang/compose.yml" config --quiet
+          for example in plain-python plain-go plain-rust go-ethereum alloy; do
+            docker compose -f "examples/$example/compose.yml" config --quiet
             docker run --rm --entrypoint promtool \
-              -v "$PWD/examples/plain-$lang/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+              -v "$PWD/examples/$example/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
               -v "$PWD/alerts/rpc-xray.rules.yml:/etc/prometheus/rpc-xray.rules.yml:ro" \
               prom/prometheus:v3.0.1 check config /etc/prometheus/prometheus.yml
           done

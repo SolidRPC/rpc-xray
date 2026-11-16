@@ -29,9 +29,13 @@ mux.Handle("GET /metrics", telemetry.Handler())
 
 Import `rpcxray "github.com/SolidRPC/rpc-xray/go"`, `net/http`, and `time`. Wrap your existing transport and preserve your client settings. For `go-ethereum`, pass this HTTP client to `rpc.DialOptions(ctx, url, rpc.WithHTTPClient(client))`, then construct `ethclient.NewClient(rpcClient)`. JSON-RPC calls made by that client flow through the wrapper.
 
+The [complete go-ethereum example](../examples/go-ethereum/README.md) includes a runnable `ethclient` app, `/metrics`, graceful shutdown, local integration tests, and matching Prometheus configuration. It uses a separate module, so the SDK itself keeps its standard-library-only dependency footprint.
+
 The wrapper only inspects POST bodies that provide `Request.GetBody`. `http.NewRequest` supplies this for `bytes.Reader`, `bytes.Buffer`, and `strings.Reader`. Non-replayable streaming requests are skipped without consuming them. Responses retain their status, headers, and body bytes. The body wrapper copies at most 1 MiB as the caller reads, with no read-ahead or extra network calls. Always close response bodies.
 
-Complete inspected bodies get JSON-RPC classification. Oversized, still-encoded, or prematurely closed bodies use HTTP status only. Read errors preserve the original error and record `network` or `timeout`. Context cancellation counts as `timeout`. The wrapper neither retries nor sets deadlines.
+Complete inspected bodies get JSON-RPC classification. Oversized, still-encoded, or prematurely closed bodies use HTTP status only. Read errors preserve the original error and record `network` or `timeout`. Context cancellation and `http.Client.Timeout` count as `timeout`, including cancellation while consuming the response body. A configured deadline alone does not turn an unrelated network failure into a timeout. The wrapper neither retries nor sets deadlines.
+
+`rpc_xray_requests_total` counts logical JSON-RPC items. One batch HTTP exchange containing three calls increments this counter three times, with each item's method and outcome. The duration histogram records the exchange once with `method="batch"`. go-ethereum reports item failures on each `rpc.BatchElem.Error`, so a nil error from `BatchCallContext` does not mean every item succeeded. Instrumentation preserves this behavior.
 
 ## Metrics and optional probes
 

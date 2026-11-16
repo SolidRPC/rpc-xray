@@ -10,12 +10,16 @@ The package name is `solidrpc-rpc-xray` and the import is `rpc_xray`. This SDK i
 pip install solidrpc-rpc-xray
 ```
 
-For development, install the local package from the repository root:
+Before publication, build and install the distributable wheel from the repository root. This example includes the requests adapter and web3.py:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install -e './python[test]'
+.venv/bin/python -m pip install build
+.venv/bin/python -m build python
+.venv/bin/python -m pip install 'python/dist/solidrpc_rpc_xray-0.1.0-py3-none-any.whl[requests]' 'web3>=7,<9'
 ```
+
+For an HTTPX-only app, install the same wheel without `[requests]` or `web3`. Existing applications can install the wheel into their own environment and retain their supported web3.py version. The wheel installs the package, not an editable checkout. Building it does not publish anything. Contributor setup is covered under [test and package](#test-and-package).
 
 ## Integrate
 
@@ -32,11 +36,13 @@ Keep your existing client configuration, request URLs, headers, retry policy, an
 
 Expose `telemetry.metrics()` from the same instance at `GET /metrics` with `Content-Type: text/plain; version=0.0.4; charset=utf-8`. The [complete example](../examples/plain-python/README.md) includes a server, polling, shutdown, and Prometheus configuration.
 
-The adapters observe buffered POST requests. Streaming request bodies are skipped without reading them. Response bytes are copied as the application consumes the body, up to 1 MiB by default. An oversized, encoded, or prematurely closed response uses HTTP status only. Unencoded bodies read to completion receive JSON-RPC classification. The adapter never reads ahead, retries, or starts RPC calls. Metrics appear when the body is consumed or closed, so close streamed responses even when you do not read them.
+The adapters observe buffered POST requests. Streaming request bodies are skipped without reading them. Response bytes are copied as the application consumes the body, up to 1 MiB by default. Complete inspected bodies receive JSON-RPC classification. Oversized or prematurely closed responses use HTTP status only. The adapter never reads ahead, retries, or starts RPC calls. Metrics appear when the body is consumed or closed, so close streamed responses even when you do not read them.
+
+The requests adapter observes bytes already decoded for the caller, including gzip responses. Its body cap applies to the decoded bytes. The HTTPX adapters operate on the transport's encoded stream and do not decompress it, so compressed HTTP 200 JSON-RPC errors use HTTP status alone and can be counted as `ok`. This HTTPX limitation also applies to its async adapter.
 
 ## requests and web3.py
 
-Install the `requests` extra with `pip install 'solidrpc-rpc-xray[requests]'` after publication, or `pip install './python[requests]'` from this checkout. Install `web3` separately when using its HTTPProvider.
+Install the `requests` extra with `pip install 'solidrpc-rpc-xray[requests]'` after publication. Before publication, use the wheel installation recipe above. Install `web3` separately when using its HTTPProvider.
 
 ```python
 import requests
@@ -52,6 +58,8 @@ w3 = Web3(provider)
 
 Here `url` is your existing endpoint. Use the application's existing timeout and retry configuration when integrating. `instrument_requests` wraps each existing session adapter and preserves its configuration. An adapter call includes retries performed inside that adapter, so place instrumentation at the level you intend to measure. Close the session when finished. Normal requests body consumption and `iter_content()` are observed, while direct lower-level raw methods other than `read()` and `stream()` are outside the adapter's inspection scope.
 
+Gzip success and JSON-RPC error responses are classified when requests consumes them through `.content`, `.json()`, or `.iter_content()`. Raw `.read()` and `.stream()` calls are inspected when their bytes are unencoded or decoding is enabled with `decode_content=True` or `response.raw.decode_content = True`, and the underlying client supports that content encoding. Reading compressed raw bytes without decoding uses HTTP status only. The adapter never changes Accept-Encoding or performs its own decompression.
+
 The web3.py integration supports synchronous HTTPProvider on web3.py 7 and 8. AsyncHTTPProvider uses aiohttp and is not wrapped by this release. HTTPX async clients are supported through `AsyncTransport`.
 
 For other clients, `telemetry.start(url, chain, request_bytes)` returns an optional observation. Call `observation.finish(status, response_bytes)` once after the client's existing body read, or `observation.finish(failure="timeout")` / `failure="network"`. Preserve and re-raise the original exception.
@@ -66,9 +74,11 @@ If your application deliberately runs a separate head probe, record its result w
 
 ## Test and package
 
-From the repository root:
+For SDK contributors, install the editable package and test dependencies from the repository root:
 
 ```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e './python[test,requests]'
 .venv/bin/python -m pytest python/tests
 .venv/bin/python -m build python
 ```

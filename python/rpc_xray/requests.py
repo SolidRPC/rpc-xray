@@ -12,39 +12,75 @@ def _failure(error):
 
 
 class _Raw:
-    def __init__(self, inner, capture):
-        self.inner, self.capture = inner, capture
+    def __init__(self, inner, capture, encodings=()):
+        self.inner, self.capture, self.encodings = inner, capture, encodings
 
     def __getattr__(self, name):
         return getattr(self.inner, name)
 
+    @property
+    def decode_content(self):
+        return self.inner.decode_content
+
+    @decode_content.setter
+    def decode_content(self, value):
+        self.inner.decode_content = value
+
+    def _feed(self, chunk, decode_content):
+        try:
+            if self.encodings:
+                decoding = (
+                    self.inner.decode_content
+                    if decode_content is None
+                    else decode_content
+                )
+                supported = getattr(self.inner, "CONTENT_DECODERS", ())
+                if not decoding or any(e not in supported for e in self.encodings):
+                    self.capture.finish()
+                    return
+            self.capture.feed(chunk)
+        except Exception:
+            self._finish()
+
+    def _finish(self, **kwargs):
+        try:
+            self.capture.finish(**kwargs)
+        except Exception:
+            pass
+
     def stream(self, *args, **kwargs):
+        decode_content = kwargs.get(
+            "decode_content", args[1] if len(args) > 1 else None
+        )
         try:
             for chunk in self.inner.stream(*args, **kwargs):
-                self.capture.feed(chunk)
+                self._feed(chunk, decode_content)
                 yield chunk
         except Exception as error:
-            self.capture.finish(failure=_failure(error))
+            self._finish(failure=_failure(error))
             raise
         else:
-            self.capture.finish(complete=True)
+            self._feed(b"", decode_content)
+            self._finish(complete=True)
 
     def read(self, amt=None, *args, **kwargs):
+        decode_content = kwargs.get("decode_content", args[0] if args else None)
         try:
             chunk = self.inner.read(amt, *args, **kwargs)
         except Exception as error:
-            self.capture.finish(failure=_failure(error))
+            self._finish(failure=_failure(error))
             raise
-        self.capture.feed(chunk)
-        if not chunk or amt is None or amt < 0:
-            self.capture.finish(complete=True)
+        if amt != 0:
+            self._feed(chunk, decode_content)
+            if not chunk or amt is None or amt < 0:
+                self._finish(complete=True)
         return chunk
 
     def close(self):
         try:
             self.inner.close()
         finally:
-            self.capture.finish()
+            self._finish()
 
 
 class RequestsAdapter(BaseAdapter):
@@ -70,14 +106,17 @@ class RequestsAdapter(BaseAdapter):
         if observation:
             try:
                 length = response.headers.get("Content-Length")
-                encoded = (
-                    response.headers.get("Content-Encoding", "identity").lower()
-                    != "identity"
+                encodings = tuple(
+                    encoding.strip().lower()
+                    for encoding in response.headers.get("Content-Encoding", "").split(
+                        ","
+                    )
+                    if encoding.strip().lower() not in ("", "identity")
                 )
-                if (
-                    response.status_code >= 400
-                    or (length is not None and int(length) > self.xray.max_body_bytes)
-                    or encoded
+                if response.status_code >= 400 or (
+                    not encodings
+                    and length is not None
+                    and int(length) > self.xray.max_body_bytes
                 ):
                     observation.finish(response.status_code)
                 else:
@@ -86,6 +125,7 @@ class RequestsAdapter(BaseAdapter):
                         _Capture(
                             observation, response.status_code, self.xray.max_body_bytes
                         ),
+                        encodings,
                     )
             except Exception:
                 observation.finish(response.status_code)

@@ -44,8 +44,8 @@ All four SDKs use the same metric names, labels, histogram buckets, and error cl
 |---|---|---|---|
 | [JavaScript / TypeScript](js/README.md) | fetch, viem, ethers | `@solidrpc/rpc-xray` on npm | [Node.js](examples/plain-node/README.md) |
 | [Python](python/README.md) | HTTPX sync and async, requests, web3.py HTTPProvider | `solidrpc-rpc-xray` on PyPI, not published yet | [Python](examples/plain-python/README.md) |
-| [Go](go/README.md) | `net/http`, compatible with `go-ethereum` | `github.com/SolidRPC/rpc-xray/go`, not tagged yet | [Go](examples/plain-go/README.md) |
-| [Rust](rust/README.md) | reqwest 0.13, Alloy 2.5 | `solidrpc-rpc-xray` on crates.io, not published yet | [Rust](examples/plain-rust/README.md) |
+| [Go](go/README.md) | `net/http`, `go-ethereum` | `github.com/SolidRPC/rpc-xray/go`, not tagged yet | [HTTP](examples/plain-go/README.md), [go-ethereum](examples/go-ethereum/README.md) |
+| [Rust](rust/README.md) | reqwest 0.13, Alloy 2.5 | `solidrpc-rpc-xray` on crates.io, not published yet | [reqwest](examples/plain-rust/README.md), [Alloy](examples/alloy/README.md) |
 
 Each SDK README leads with its intended package install command and includes local package instructions for unreleased versions. Every example has `/metrics`, shutdown handling, and a matching Prometheus config. Run one example at a time on the default port 9464, or assign separate ports and scrape targets.
 
@@ -71,15 +71,20 @@ Integrate RPC X-Ray using https://github.com/SolidRPC/rpc-xray.
    Explain that head freshness and lag are then unmeasured. Otherwise document
    the eth_chainId detection calls and eth_blockNumber probe overhead.
    Python, Go, and Rust are passive and require explicit chain labels.
-5. Expose GET /metrics once per process on the existing HTTP server, or use
-   serveMetrics on port 9464. Use the same registry for wrapping and exporting.
-   An Xray instance exports with instance.metrics(), not the shared handler.
+5. Expose GET /metrics once per process using the same registry that wraps
+   the client. In JavaScript, use serveMetrics for the shared registry or
+   export your Xray instance's metrics(). Python and Rust export
+   telemetry.metrics() through the application's HTTP server. Go exposes
+   telemetry.Handler(). Follow the language's complete server example.
 6. Set the Prometheus host, port and metrics_path to the actual endpoint.
    For Docker, use host.docker.internal to reach the host, not localhost.
    Verify the target is UP and metrics advance after real application calls.
-7. Run type checks and tests. Use local mock RPCs for integration tests.
-   Check healthy traffic with no error series, missing head measurements,
-   and the no-incident dashboard state. Do not turn missing data into health.
+7. Run type checks and tests through the actual application client. Use
+   local mock RPCs for failures, including compressed JSON-RPC errors,
+   client timeouts, HTTP 429/500 with JSON-RPC bodies, and mixed batches.
+   Check healthy traffic, missing head measurements, and no-incident
+   dashboard states. Do not turn missing data into health. Verify that
+   scraping metrics adds zero RPC calls and stop test apps afterward.
 8. Report changed files, metrics URL, added RPC overhead, how to stop any
    example process, and clients that could not be wrapped.
 ```
@@ -167,7 +172,7 @@ The JavaScript fetch wrapper keeps its original pass-through behavior:
 - API keys never reach metrics or logs. The provider label is the host name only.
 - rpc-xray makes no network calls except to the endpoints you already use. Nothing is sent to SolidRPC.
 
-Python and Go wrap HTTP transports. They return the underlying response while observing bounded copies as your code reads its body. Rust provides an explicit reqwest response wrapper and an Alloy layer that preserves packets and errors. These adapters never read ahead, retry requests, or change deadlines. Read each SDK's body-consumption notes before using streaming clients. Metrics are available after consumption or closure. The shared [specification](spec/README.md) describes these language boundaries.
+Python and Go wrap HTTP transports. They return the underlying response while observing bounded copies as your code reads its body. Rust provides an explicit reqwest response wrapper and an Alloy HTTP transport that observes the original status before decoding packets. These adapters do not add body reads, retries, or deadline changes. Read each SDK's body-consumption notes before using streaming clients. Metrics are available after consumption or closure. The shared [specification](spec/README.md) describes these language boundaries.
 
 By default, the JavaScript SDK detects each endpoint's chain with `eth_chainId` (up to three attempts) and probes `eth_blockNumber` immediately after discovery, then every 15 seconds, about 173,000 probe requests per 30-day month per endpoint. Change the probe interval with `probeIntervalSeconds`.
 

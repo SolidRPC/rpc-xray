@@ -37,20 +37,38 @@ Only buffered POST bodies are observed. Response bytes are copied as consumed up
 
 ## Alloy
 
-Enable the `alloy` feature and add the layer to your RPC client, below retry or fallback layers when you want individual attempts measured:
+Enable `alloy` and use `XrayHttp` as the HTTP transport. This feature includes reqwest support, including when default features are disabled. It uses the reqwest client you already configured. Provider calls remain unchanged.
 
-```rust,ignore
-use alloy::{providers::ProviderBuilder, rpc::client::ClientBuilder};
-use solidrpc_rpc_xray::{Xray, XrayLayer};
-
-let telemetry = Xray::default();
-let client = ClientBuilder::default()
-    .layer(XrayLayer::new(telemetry.clone(), url.as_str(), "ethereum"))
-    .connect_http(url);
-let provider = ProviderBuilder::new().connect_client(client);
+```toml
+[dependencies]
+alloy = { version = "2.5", default-features = false, features = ["providers", "rpc-client", "reqwest-rustls-tls"] }
+solidrpc-rpc-xray = { version = "0.1", features = ["alloy"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
 ```
 
-The layer preserves Alloy request and response packets and errors. It classifies decoded JSON-RPC responses, HTTP errors, and transport failures. Serialization for inspection is bounded. It measures the operation at its position in the Tower stack. Enable the default `reqwest` feature to recognize reqwest timeout errors. Subscriptions and WebSocket traffic are outside this HTTP adapter's scope.
+Until the SDK is published, replace its `version` entry with a `path` to this directory.
+
+```rust,no_run
+use alloy::{providers::ProviderBuilder, rpc::client::ClientBuilder};
+use solidrpc_rpc_xray::{Xray, XrayHttp};
+
+fn integrate(existing_http: reqwest::Client, url: reqwest::Url) {
+    let telemetry = Xray::default();
+    let transport = XrayHttp::new(existing_http, url, telemetry.clone(), "ethereum");
+    let is_local = transport.guess_local();
+    let client = ClientBuilder::default().transport(transport, is_local);
+    let provider = ProviderBuilder::new().connect_client(client);
+    let _ = (provider, telemetry);
+}
+```
+
+Expose the same `telemetry.metrics()` at `/metrics`. The [complete Alloy example](../examples/alloy/README.md) includes the provider, HTTP server, shutdown handling, and matching Prometheus configuration. Its build and mock integration test run in CI.
+
+`XrayHttp` observes HTTP status before Alloy decodes JSON-RPC errors. HTTP 500 is `http_error` and HTTP 429 is `rate_limited`, even when the body is a valid JSON-RPC error or success packet. The packets and errors returned to Alloy callers match its HTTP transport, including error bodies and `Retry-After`. Inspection is bounded by `max_body_bytes`. Like Alloy's HTTP transport, it reads the full response body for decoding, with no additional reads for telemetry. It does not change your client headers, timeout, retry, redirect, or TLS configuration and makes no discovery or probe calls.
+
+Use this transport once per request path. Do not also wrap the same request with `Xray::execute` or another RPC X-Ray adapter. If you add Alloy retry or fallback layers through `ClientBuilder`, the transport measures each attempt that reaches it. Retries or redirects configured inside the existing reqwest client remain one transport operation. Subscriptions and WebSocket traffic are outside this HTTP transport's scope.
+
+The unreleased `XrayLayer` packet adapter has been replaced by `XrayHttp`. Packet-level instrumentation cannot preserve HTTP status precedence because Alloy can discard the status when decoding an error body.
 
 ## Metrics and optional probes
 

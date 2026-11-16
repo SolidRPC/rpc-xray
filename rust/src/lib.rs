@@ -5,7 +5,7 @@ mod classify;
 mod http;
 
 #[cfg(feature = "alloy")]
-pub use alloy::{XrayLayer, XrayService};
+pub use alloy::XrayHttp;
 pub use classify::chain_label;
 #[cfg(feature = "reqwest")]
 pub use http::Response;

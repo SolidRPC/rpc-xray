@@ -15,10 +15,18 @@ type Transport struct {
 	Base  http.RoundTripper
 }
 
-func failureKind(err error) string {
+func failureKind(err error, ctx context.Context, cancel <-chan struct{}) string {
 	var timeout net.Error
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) || (errors.As(err, &timeout) && timeout.Timeout()) {
 		return "timeout"
+	}
+	if ctx.Err() != nil {
+		return "timeout"
+	}
+	select {
+	case <-cancel:
+		return "timeout"
+	default:
 	}
 	return "network"
 }
@@ -52,7 +60,7 @@ func (t *Transport) RoundTrip(r *http.Request) (*http.Response, error) {
 	o := t.begin(r)
 	response, err := base.RoundTrip(r)
 	if err != nil {
-		o.Finish(0, nil, failureKind(err))
+		o.Finish(0, nil, failureKind(err, r.Context(), r.Cancel))
 		return response, err
 	}
 	if o == nil || response == nil {
@@ -62,7 +70,7 @@ func (t *Transport) RoundTrip(r *http.Request) (*http.Response, error) {
 	if response.StatusCode >= 400 || response.ContentLength > int64(t.Xray.options.MaxBodyBytes) || (encoding != "" && encoding != "identity") || response.Body == nil {
 		o.Finish(response.StatusCode, nil, "")
 	} else {
-		response.Body = &bodyCapture{inner: response.Body, observation: o, status: response.StatusCode, cap: t.Xray.options.MaxBodyBytes, body: make([]byte, 0), remaining: response.ContentLength}
+		response.Body = &bodyCapture{inner: response.Body, observation: o, status: response.StatusCode, cap: t.Xray.options.MaxBodyBytes, body: make([]byte, 0), remaining: response.ContentLength, context: r.Context(), cancel: r.Cancel}
 	}
 	return response, err
 }
@@ -84,6 +92,8 @@ type bodyCapture struct {
 	body        []byte
 	done        bool
 	remaining   int64
+	context     context.Context
+	cancel      <-chan struct{}
 }
 
 func (b *bodyCapture) Read(p []byte) (int, error) {
@@ -102,7 +112,7 @@ func (b *bodyCapture) Read(p []byte) (int, error) {
 			}
 			if err != nil && err != io.EOF {
 				b.done = true
-				b.observation.Finish(b.status, nil, failureKind(err))
+				b.observation.Finish(b.status, nil, failureKind(err, b.context, b.cancel))
 			} else if err == io.EOF || b.remaining == 0 {
 				b.done = true
 				b.observation.Finish(b.status, b.body, "")

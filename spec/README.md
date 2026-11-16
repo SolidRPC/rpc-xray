@@ -4,11 +4,11 @@ Every language package implements this contract and passes `vectors.json`. Alert
 
 ## Pass-through rules
 
-1. Request URLs, headers, and bodies are preserved. Adapters do not add retries or change timeouts. JavaScript returns the original promise and response. Python and Go preserve response values and errors while wrapping the body stream. Rust reqwest uses an explicit response adapter, and its Alloy layer preserves response packets and errors.
+1. Request URLs, headers, and bodies are preserved. Adapters do not add retries or change timeouts. JavaScript returns the original promise and response. Python and Go preserve response values and errors while wrapping the body stream. Rust reqwest uses an explicit response adapter. The Alloy HTTP transport uses the existing reqwest client and preserves Alloy response packets and errors while retaining the HTTP status for metrics.
 2. Telemetry parsing or recording failures do not replace application results. A poisoned Rust registry is skipped. Native runtime failures such as allocation failure or application panics are not intercepted.
-3. No extra network reads are awaited to collect telemetry. JavaScript observes a cloned response asynchronously. Python, Go, and Rust reqwest observe bytes as the caller consumes them. Alloy observes already decoded packets. Bounded local parsing and counter updates add some CPU work to these native adapters.
+3. No extra network reads are awaited to collect telemetry. JavaScript observes a cloned response asynchronously. Python, Go, and Rust reqwest observe bytes as the caller consumes them. Alloy observes the body read required by its HTTP transport before decoding it into packets. Bounded local parsing and counter updates add some CPU work to these native adapters.
 4. The URL, method, headers and body of a request are never changed.
-5. A response body is inspected only on a copy and only up to the configured body cap (default 1 MiB). A larger body is classified by HTTP status alone. Native stream adapters also use status alone if the caller closes before finishing or the body remains encoded. Request streams that cannot be copied without consumption are skipped. Metrics cannot infer a JSON-RPC error from an unread body.
+5. A response body is inspected only on a copy and only up to the configured body cap (default 1 MiB). A larger body is classified by HTTP status alone. Native stream adapters also use status alone if the caller closes before finishing or the observed bytes remain encoded. The Python requests adapter observes the chunks requests already decodes for the caller, including gzip, with the cap applied to decoded bytes. Its raw undecoded reads and HTTPX's encoded transport responses retain status-only classification. Request streams that cannot be copied without consumption are skipped. Metrics cannot infer a JSON-RPC error from an unread body.
 6. Only JSON-RPC requests are recorded: a POST whose body is a JSON object or array carrying `method`.
 7. No network calls are made except to the endpoints the application already calls.
 8. Credentials never appear in metrics or logs. The `provider` label is the URL host.
@@ -33,7 +33,9 @@ Classification order for a JSON-RPC error object `{code, message}`:
 2. `caller_error` if `code` is one of 3, -32600, -32601, -32602, -32700, or the lower-cased message contains one of: `execution reverted`, `revert`, `nonce too low`, `nonce too high`, `already known`, `insufficient funds`, `underpriced`, `intrinsic gas too low`, `gas required exceeds`, `out of gas`, `exceeds block gas limit`, `max fee per gas less than block base fee`, `invalid opcode`, `invalid sender`, `invalid params`, `method not found`, `does not exist/is not available`.
 3. `rpc_error` otherwise.
 
-Batches: each request entry takes the outcome of the response entry with the same `id`. An entry with no matching response is `rpc_error`. If the response to a batch is a single object, every entry takes its outcome.
+HTTP status takes precedence over JSON-RPC content. HTTP 429 is `rate_limited` even when its body contains a caller error. Other HTTP 4xx and 5xx responses are `http_error` even when the body is valid JSON-RPC. The Alloy HTTP transport observes status before Alloy's packet decoding can discard it.
+
+Batches: each request entry takes the outcome of the response entry with the same `id`. An entry with no matching response is `rpc_error`. If the response to a batch is a single object, every entry takes its outcome. Request counters count logical JSON-RPC items, while the duration histogram counts HTTP exchanges. One HTTP batch containing three calls adds three request observations and one duration observation.
 
 ## Labels
 
@@ -78,4 +80,4 @@ Native SDKs export `rpc_xray_offers_enabled 0` and do not print promotional mess
 
 `contract.json` is the source for chain names, method names, histogram buckets, caller codes, and error patterns. `scripts/generate-contract.py` writes the language copies. Run it after contract edits and commit the results together. CI checks that generated files match.
 
-`vectors.json` is run by all four SDKs. Each implementation also tests transport behavior, bounded capture, and metric output. The complete examples use only local mock RPCs in CI. They verify `/metrics`, errors and recovery, pacing, credential omission, and shutdown.
+`vectors.json` is run by all four SDKs. Each implementation also tests transport behavior, bounded capture, and metric output. Real-client tests cover web3.py compressed responses, Go client timeouts, and Alloy HTTP status precedence. The complete HTTP, go-ethereum, and Alloy examples use only local mock RPCs in CI. They verify `/metrics`, errors and recovery, pacing, credential omission, and shutdown.

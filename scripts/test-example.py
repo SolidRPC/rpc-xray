@@ -14,7 +14,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 parser = argparse.ArgumentParser()
-parser.add_argument("language", choices=["python", "go", "rust"])
+parser.add_argument("language", choices=["python", "go", "rust", "go-ethereum", "alloy"])
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[1]
 calls = []
@@ -76,7 +76,13 @@ command = {
     "python": [sys.executable, "server.py"],
     "go": [str(root / "tmp/rpc-xray-go")],
     "rust": [str(root / "examples/plain-rust/target/debug/rpc-xray-example")],
+    "go-ethereum": [str(root / "tmp/rpc-xray-go-ethereum")],
+    "alloy": [str(root / "examples/alloy/target/debug/rpc-xray-alloy-example")],
 }[args.language]
+example_directory = {
+    "go-ethereum": "go-ethereum",
+    "alloy": "alloy",
+}.get(args.language, f"plain-{args.language}")
 env = {
     **os.environ,
     "RPC_URL": f"http://127.0.0.1:{mock.server_port}/fixture-secret?key=fixture-secret",
@@ -89,7 +95,7 @@ try:
     with tempfile.TemporaryFile(mode="w+") as log:
         process = subprocess.Popen(
             command,
-            cwd=root / f"examples/plain-{args.language}",
+            cwd=root / "examples" / example_directory,
             env=env,
             stdout=log,
             stderr=log,
