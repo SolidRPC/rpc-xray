@@ -47,5 +47,3 @@ The workflow checks metadata, formatting, types, unit tests and generated monito
 Each manual run builds and tests its own artifact. The publish job downloads that exact tarball, refuses an already published version, and publishes with public access and provenance. It then compares npm's tarball integrity with the tested artifact and verifies imports after a fresh registry installation. Concurrent manual release runs are serialized.
 
 If publication succeeds but registry verification fails, inspect npm before retrying. An npm version cannot be overwritten. The workflow does not create a Git tag or GitHub release.
-
-The release workflow does not start the example app, alter endpoint credentials or resume RPC Pulse.
