@@ -27,14 +27,18 @@ jobs:
       - run: npm ci
       - run: npm run check
       - name: Package includes the license
+        id: package
         run: |
           cmp ../LICENSE LICENSE
-          npm pack --ignore-scripts
-          tar -tf solidrpc-rpc-xray-*.tgz | grep '^package/LICENSE$'
+          tarball=$(npm pack --ignore-scripts --json | node -p 'JSON.parse(require("node:fs").readFileSync(0, "utf8"))[0].filename')
+          tar -tf "$tarball" | grep '^package/LICENSE$'
+          printf 'filename=%s\n' "$tarball" >> "$GITHUB_OUTPUT"
       - name: Test the Node example against the npm tarball
         working-directory: examples/plain-node
+        env:
+          TARBALL: ${{ steps.package.outputs.filename }}
         run: |
-          npm install --no-save --package-lock=false ../../js/solidrpc-rpc-xray-0.1.0.tgz
+          npm install --no-save --package-lock=false "../../js/$TARBALL"
           npm test
 
   alerts:

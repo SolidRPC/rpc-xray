@@ -176,6 +176,8 @@ Everything is optional.
 
 ## Development before publishing
 
+Maintainers can prepare and publish releases with the [manual npm release workflow](RELEASING.md). Its default mode validates and packages without publishing.
+
 These steps are for contributors and pre-release testing. Application integrations use the npm package and import `@solidrpc/rpc-xray`.
 
 Before the first npm release, build a local package from a checkout. Repository access is required while the repository is private:
