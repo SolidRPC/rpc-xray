@@ -1,0 +1,162 @@
+name: npm release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact version in js/package.json
+        required: true
+        type: string
+      publish:
+        description: Publish to npm after validation (leave unchecked for a dry run)
+        required: true
+        default: false
+        type: boolean
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - scripts/release/**
+      - js/**
+      - examples/plain-node/**
+      - alerts/**
+      - dashboards/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-release-${{ github.event_name == 'workflow_dispatch' && 'manual' || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Validate and package
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
+      filename: ${{ steps.metadata.outputs.filename }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Validate release inputs
+        id: metadata
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          node --test scripts/release/metadata.test.mjs
+          node scripts/release/metadata.mjs
+      - name: Check and build the package
+        working-directory: js
+        run: |
+          npm ci
+          npm run check
+          cmp ../LICENSE LICENSE
+          npm pack --ignore-scripts --json > ../package-manifest.json
+      - name: Test the packed package
+        working-directory: examples/plain-node
+        env:
+          TARBALL: ${{ steps.metadata.outputs.filename }}
+        run: |
+          npm install --no-save --package-lock=false "../../js/$TARBALL"
+          npm test
+          node --input-type=module -e 'import { Xray, metricsHandler } from "@solidrpc/rpc-xray"; if (typeof Xray !== "function" || typeof metricsHandler !== "function") process.exit(1)'
+          node -e 'const { Xray, metricsHandler } = require("@solidrpc/rpc-xray"); if (typeof Xray !== "function" || typeof metricsHandler !== "function") process.exit(1)'
+      - name: Validate monitoring assets
+        run: |
+          sh alerts/build.sh
+          python3 dashboards/build.py
+          git diff --exit-code
+          python3 dashboards/test_queries.py > dashboard-tests.json
+          docker run --rm -v "$PWD:/repo:ro" --entrypoint promtool prom/prometheus:v3.0.1 check rules /repo/alerts/rpc-xray.rules.yml
+          docker run --rm -v "$PWD:/repo:ro" --entrypoint promtool prom/prometheus:v3.0.1 test rules /repo/alerts/tests/rules_test.yml /repo/alerts/tests/offer_test.yml /repo/alerts/tests/healthy_test.yml /repo/dashboard-tests.json
+          docker compose -f stack/docker-compose.yml config --quiet
+          docker compose -f examples/plain-node/compose.yml config --quiet
+      - name: Dry-run publication
+        working-directory: js
+        env:
+          TARBALL: ${{ steps.metadata.outputs.filename }}
+        run: npm publish "./$TARBALL" --dry-run --ignore-scripts --access public --provenance --tag latest --registry=https://registry.npmjs.org
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: |
+            js/${{ steps.metadata.outputs.filename }}
+            package-manifest.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Summarize package validation
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+        run: |
+          printf 'Validated `@solidrpc/rpc-xray@%s` from `%s`.\n\n' "$VERSION" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          printf 'The tested tarball and integrity manifest are in the `npm-package` artifact. This job does not publish.\n' >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    name: Publish to npm
+    needs: package
+    if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main' && github.repository == 'SolidRPC/rpc-xray'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - run: npm install --global npm@11
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-package
+          path: release-package
+      - name: Check version availability
+        env:
+          VERSION: ${{ needs.package.outputs.version }}
+        run: |
+          node --input-type=module <<'JS'
+          const response = await fetch(`https://registry.npmjs.org/@solidrpc%2frpc-xray/${process.env.VERSION}`);
+          if (response.status === 200) throw new Error('This version is already published. Bump the package version before releasing again.');
+          if (response.status !== 404) throw new Error(`Registry availability check failed: HTTP ${response.status}`);
+          JS
+      - name: Publish the tested tarball with provenance
+        working-directory: js
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          TARBALL: ${{ needs.package.outputs.filename }}
+        run: npm publish "../release-package/js/$TARBALL" --ignore-scripts --access public --provenance --tag latest --registry=https://registry.npmjs.org
+      - name: Verify registry integrity and package imports
+        env:
+          VERSION: ${{ needs.package.outputs.version }}
+        run: |
+          node --input-type=module <<'JS'
+          import { readFile } from 'node:fs/promises';
+          const [packed] = JSON.parse(await readFile('release-package/package-manifest.json', 'utf8'));
+          let verified = false;
+          for (let attempt = 0; attempt < 5; attempt++) {
+            const response = await fetch(`https://registry.npmjs.org/@solidrpc%2frpc-xray/${process.env.VERSION}`);
+            if (response.ok) {
+              const published = await response.json();
+              if (published.dist.integrity !== packed.integrity) throw new Error('Published tarball integrity differs from the tested artifact');
+              verified = true;
+              break;
+            }
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
+          if (!verified) throw new Error('Publication returned successfully but registry verification is pending. Check npm before retrying.');
+          JS
+          release_smoke_dir=$(mktemp -d)
+          cd "$release_smoke_dir"
+          npm install --ignore-scripts --no-audit --no-fund "@solidrpc/rpc-xray@$VERSION" --registry=https://registry.npmjs.org
+          node --input-type=module -e 'import { Xray } from "@solidrpc/rpc-xray"; const xray = new Xray({ probeIntervalSeconds: 0, offers: false }); if (typeof xray.metrics() !== "string") process.exit(1); xray.close()'
+          node -e 'const { Xray } = require("@solidrpc/rpc-xray"); if (typeof Xray !== "function") process.exit(1)'
+      - name: Summarize publication
+        env:
+          VERSION: ${{ needs.package.outputs.version }}
+        run: printf 'Published and verified `@solidrpc/rpc-xray@%s` with provenance.\n' "$VERSION" >> "$GITHUB_STEP_SUMMARY"
