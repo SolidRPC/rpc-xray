@@ -43,3 +43,17 @@ The workflow checks metadata, formatting, types, unit tests and generated monito
 Each manual run builds and tests its own artifact. The publish job downloads that exact tarball, refuses an already published version, and publishes with public access and provenance. It allows up to five minutes for npm processing, then compares npm's tarball integrity with the tested artifact and verifies imports after a fresh registry installation. Concurrent manual release runs are serialized.
 
 If publication succeeds but registry verification fails, inspect npm before retrying. An npm version cannot be overwritten. The workflow does not create a Git tag or GitHub release.
+
+## Python, Go, and Rust
+
+These SDKs start at their own `0.1.0` and are not published by the npm workflow. The CI workflow tests their package builds and complete examples without publishing or creating tags. A merge does not release a package.
+
+| SDK | Version source | Release artifact | Intended release identity |
+|---|---|---|---|
+| Python | `python/pyproject.toml` and `python/rpc_xray/core.py` | Wheel and source distribution | `solidrpc-rpc-xray` on PyPI |
+| Go | `go/xray.go` | Go module from a source tag | `go/v0.1.0` for the `go/` subdirectory |
+| Rust | `rust/Cargo.toml` | `.crate` archive | `solidrpc-rpc-xray` on crates.io |
+
+Before a first release, confirm ownership and availability of the registry name, configure its publishing credentials or trusted publisher, and add a separate manually triggered release workflow. Each workflow should validate and package without publishing by default, then publish only the tested artifact with explicit authorization. Go needs a subdirectory-prefixed Git tag after its checks pass. Do not reuse an npm tag for the Go module.
+
+Update the relevant package version, lockfile, SDK docs, and examples together. Keep the published package version independent from the shared contract version. Any change to metric meaning, labels, or error classification requires a coordinated contract review and tests across every SDK before release.

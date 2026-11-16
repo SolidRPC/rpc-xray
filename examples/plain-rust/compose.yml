@@ -1,0 +1,12 @@
+name: rpc-xray-plain-rust
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../../alerts/rpc-xray.rules.yml:/etc/prometheus/rpc-xray.rules.yml:ro
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    ports:
+      - 127.0.0.1:${PROMETHEUS_PORT:-9090}:9090

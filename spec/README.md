@@ -4,11 +4,11 @@ Every language package implements this contract and passes `vectors.json`. Alert
 
 ## Pass-through rules
 
-1. The wrapped client returns exactly what the underlying client returns: same value, same error, same timing of delivery.
-2. Any failure inside rpc-xray is swallowed. It never reaches the caller.
-3. Recording happens after the response is handed back. Nothing is awaited on the request path.
+1. Request URLs, headers, and bodies are preserved. Adapters do not add retries or change timeouts. JavaScript returns the original promise and response. Python and Go preserve response values and errors while wrapping the body stream. Rust reqwest uses an explicit response adapter, and its Alloy layer preserves response packets and errors.
+2. Telemetry parsing or recording failures do not replace application results. A poisoned Rust registry is skipped. Native runtime failures such as allocation failure or application panics are not intercepted.
+3. No extra network reads are awaited to collect telemetry. JavaScript observes a cloned response asynchronously. Python, Go, and Rust reqwest observe bytes as the caller consumes them. Alloy observes already decoded packets. Bounded local parsing and counter updates add some CPU work to these native adapters.
 4. The URL, method, headers and body of a request are never changed.
-5. A response body is inspected only on a copy and only up to `maxBodyBytes` (default 1 MiB). A larger body is classified by HTTP status alone.
+5. A response body is inspected only on a copy and only up to the configured body cap (default 1 MiB). A larger body is classified by HTTP status alone. Native stream adapters also use status alone if the caller closes before finishing or the body remains encoded. Request streams that cannot be copied without consumption are skipped. Metrics cannot infer a JSON-RPC error from an unread body.
 6. Only JSON-RPC requests are recorded: a POST whose body is a JSON object or array carrying `method`.
 7. No network calls are made except to the endpoints the application already calls.
 8. Credentials never appear in metrics or logs. The `provider` label is the URL host.
@@ -68,4 +68,14 @@ Batches: each request entry takes the outcome of the response entry with the sam
 
 ## Head probe
 
-Each endpoint is polled with `eth_blockNumber` every `probeIntervalSeconds` (default 15, `0` turns the probe off). Probe calls are counted in `rpc_xray_probe_requests_total` only, never in `rpc_xray_requests_total`.
+JavaScript polls each endpoint with `eth_blockNumber` every `probeIntervalSeconds` (default 15, `0` turns the probe off). Supply an explicit chain as well to disable its chain discovery calls.
+
+Python, Go, and Rust are passive and never schedule probes or discover chains. Applications can record results from their own separate, unwrapped head probes with `record_probe` / `RecordProbe`. A failed probe increments the `error` result and leaves the last known head intact. A successful head higher than the previous head updates the last-advance timestamp. Probe calls are counted only in `rpc_xray_probe_requests_total`. Without successful observations, head gauges are absent. Native SDKs aggregate head observations by chain and provider host, so use distinct hosts if individual routes need independent head measurements.
+
+Native SDKs export `rpc_xray_offers_enabled 0` and do not print promotional messages. Their `rpc_xray_info` language values are `python`, `go`, and `rust`. JavaScript retains `js` and its configurable offer behavior. Each SDK reports its own package version.
+
+## Shared sources and conformance
+
+`contract.json` is the source for chain names, method names, histogram buckets, caller codes, and error patterns. `scripts/generate-contract.py` writes the language copies. Run it after contract edits and commit the results together. CI checks that generated files match.
+
+`vectors.json` is run by all four SDKs. Each implementation also tests transport behavior, bounded capture, and metric output. The complete examples use only local mock RPCs in CI. They verify `/metrics`, errors and recovery, pacing, credential omission, and shutdown.

@@ -2,7 +2,7 @@
 
 **See every request your RPC provider failed.**
 
-Add three lines of code. rpc-xray counts the errors, stale blocks and slow calls your users hit, and shows what they have cost you so far.
+Instrument your existing HTTP JSON-RPC client. rpc-xray counts errors and slow calls, measures stale blocks when head probes are enabled, and exports the results to Prometheus.
 
 ![A red line of failed user requests climbs while a flat green line shows where it should be](assets/hero.png)
 
@@ -16,7 +16,7 @@ Node.js 20 or newer. The package has no runtime dependencies.
 npm install @solidrpc/rpc-xray
 ```
 
-This is the standard installation path once the package is published. For testing before the first npm release, use the [development instructions](#development-before-publishing).
+The npm package is published. For testing unreleased changes, use the [development instructions](#development-and-release-testing).
 
 For an existing viem app:
 
@@ -34,7 +34,22 @@ await serveMetrics({ host: "127.0.0.1", port: 9464 });
 
 Here `url` is your existing endpoint. The explicit chain label and disabled probes keep instrumentation from adding RPC calls. Omit these options to enable chain detection and the default head probes. See [request overhead](#what-it-does-to-your-requests) before choosing.
 
-Start with the [complete plain Node.js example](examples/plain-node/README.md) for a runnable app, `/metrics`, shutdown handling and matching Prometheus configuration. [Other JavaScript integrations](js/README.md) cover ethers and existing HTTP servers. Go and Rust packages are planned and are not available yet.
+Start with the [complete plain Node.js example](examples/plain-node/README.md) for a runnable app, `/metrics`, shutdown handling, and matching Prometheus configuration. [Other JavaScript integrations](js/README.md) cover ethers and existing HTTP servers.
+
+## Language SDKs
+
+All four SDKs use the same metric names, labels, histogram buckets, and error classifications. They share the dashboards and alert rules.
+
+| Language | Supported integration | Package | Complete example |
+|---|---|---|---|
+| [JavaScript / TypeScript](js/README.md) | fetch, viem, ethers | `@solidrpc/rpc-xray` on npm | [Node.js](examples/plain-node/README.md) |
+| [Python](python/README.md) | HTTPX sync and async, requests, web3.py HTTPProvider | `solidrpc-rpc-xray` on PyPI, not published yet | [Python](examples/plain-python/README.md) |
+| [Go](go/README.md) | `net/http`, compatible with `go-ethereum` | `github.com/SolidRPC/rpc-xray/go`, not tagged yet | [Go](examples/plain-go/README.md) |
+| [Rust](rust/README.md) | reqwest 0.13, Alloy 2.5 | `solidrpc-rpc-xray` on crates.io, not published yet | [Rust](examples/plain-rust/README.md) |
+
+Each SDK README leads with its intended package install command and includes local package instructions for unreleased versions. Every example has `/metrics`, shutdown handling, and a matching Prometheus config. Run one example at a time on the default port 9464, or assign separate ports and scrape targets.
+
+The new Python, Go, and Rust SDKs are passive by default. They make no discovery or probe calls and do not print offer messages. Supply a chain label explicitly. Application-managed probe observations can enable the same head metrics. JavaScript retains its existing discovery and probe defaults, described below.
 
 ## Add it with a coding agent
 
@@ -43,17 +58,19 @@ Paste this prompt into your coding agent, in your project:
 ```text
 Integrate RPC X-Ray using https://github.com/SolidRPC/rpc-xray.
 
-1. Read the root and JavaScript READMEs. Find the existing HTTP JSON-RPC
-   clients. JavaScript is implemented. Report unsupported languages.
-2. Install @solidrpc/rpc-xray with the existing package manager. If the
+1. Read the root README and the README for the application's language.
+   Find the existing HTTP JSON-RPC clients and a supported adapter.
+2. Install the language package with the existing package manager. If the
    requested version is not published yet, report that release prerequisite.
-   The documented local tarball is a fallback for pre-release testing.
-3. Wrap the existing HTTP layer without changing URLs, headers, retries,
-   timeouts or application call sites. Keep credentials out of code and logs.
-4. Respect the application's request budget. To add zero RPC calls, set
+   The documented local package is a fallback for pre-release testing.
+3. Use the supported HTTP adapter without changing URLs, headers, retries,
+   or timeouts. Explain any required call-site changes, including Rust's
+   explicit reqwest response wrapper. Keep credentials out of code and logs.
+4. Respect the application's request budget. In JavaScript, to add zero RPC calls, set
    probeIntervalSeconds: 0 AND supply the correct chain for every endpoint.
    Explain that head freshness and lag are then unmeasured. Otherwise document
    the eth_chainId detection calls and eth_blockNumber probe overhead.
+   Python, Go, and Rust are passive and require explicit chain labels.
 5. Expose GET /metrics once per process on the existing HTTP server, or use
    serveMetrics on port 9464. Use the same registry for wrapping and exporting.
    An Xray instance exports with instance.metrics(), not the shared handler.
@@ -140,7 +157,7 @@ The targets on the dashboard are editable at the top: success rate and p95 laten
 
 ## What it does to your requests
 
-Nothing. These rules are tested:
+The JavaScript fetch wrapper keeps its original pass-through behavior:
 
 - The wrapped client returns exactly what the underlying client returns: the same promise, the same response, the same error.
 - Any failure inside rpc-xray is swallowed and never reaches your code.
@@ -150,7 +167,9 @@ Nothing. These rules are tested:
 - API keys never reach metrics or logs. The provider label is the host name only.
 - rpc-xray makes no network calls except to the endpoints you already use. Nothing is sent to SolidRPC.
 
-By default, RPC X-Ray detects each endpoint's chain with `eth_chainId` (up to three attempts) and probes `eth_blockNumber` immediately after discovery, then every 15 seconds, about 173,000 probe requests per 30-day month per endpoint. Change the probe interval with `probeIntervalSeconds`.
+Python and Go wrap HTTP transports. They return the underlying response while observing bounded copies as your code reads its body. Rust provides an explicit reqwest response wrapper and an Alloy layer that preserves packets and errors. These adapters never read ahead, retry requests, or change deadlines. Read each SDK's body-consumption notes before using streaming clients. Metrics are available after consumption or closure. The shared [specification](spec/README.md) describes these language boundaries.
+
+By default, the JavaScript SDK detects each endpoint's chain with `eth_chainId` (up to three attempts) and probes `eth_blockNumber` immediately after discovery, then every 15 seconds, about 173,000 probe requests per 30-day month per endpoint. Change the probe interval with `probeIntervalSeconds`.
 
 For **zero additional RPC calls**, set `probeIntervalSeconds: 0` and supply an explicit `chain` to every wrapper. Disabling probes alone does not disable chain detection. Request counters and latency remain available. Head age and lag are unmeasured, and the dashboard must not be read as reporting zero lag. Scraping `/metrics` itself never triggers RPC calls.
 
@@ -162,7 +181,7 @@ Nothing is sent to us. Set `offers: false` to turn the message off.
 
 ## Configuration
 
-Everything is optional.
+The following options apply to JavaScript. See the language SDK READMEs for Python, Go, and Rust options.
 
 | Option | Default | Meaning |
 |---|---|---|
@@ -177,6 +196,10 @@ Everything is optional.
 ## Development and release testing
 
 Maintainers can prepare and publish releases with the [manual npm release workflow](RELEASING.md). Its default mode validates and packages without publishing.
+
+Python, Go, and Rust are versioned independently. Their CI jobs validate packages and examples but do not publish or create release tags. Release preparation for these languages is documented in [RELEASING.md](RELEASING.md#python-go-and-rust).
+
+The allowlists, buckets, and error patterns live in `spec/contract.json`. After changing it, run `python3 scripts/generate-contract.py`. All four languages run `spec/vectors.json` in CI. Generated copies are checked for drift.
 
 These steps are for contributors and pre-release testing. Application integrations use the npm package and import `@solidrpc/rpc-xray`.
 

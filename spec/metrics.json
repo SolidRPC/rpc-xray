@@ -1,0 +1,14 @@
+{
+  "rpc_xray_requests_total": ["counter", ["chain", "provider", "method", "outcome"]],
+  "rpc_xray_request_duration_seconds": ["histogram", ["chain", "provider", "method"]],
+  "rpc_xray_slow_seconds_total": ["counter", ["chain", "provider"]],
+  "rpc_xray_head_block": ["gauge", ["chain", "provider"]],
+  "rpc_xray_head_last_advance_timestamp_seconds": ["gauge", ["chain", "provider"]],
+  "rpc_xray_head_age_seconds": ["gauge", ["chain", "provider"]],
+  "rpc_xray_head_lag_blocks": ["gauge", ["chain", "provider"]],
+  "rpc_xray_probe_requests_total": ["counter", ["chain", "provider", "result"]],
+  "rpc_xray_value_per_request_usd": ["gauge", []],
+  "rpc_xray_revenue_per_hour_usd": ["gauge", []],
+  "rpc_xray_offers_enabled": ["gauge", []],
+  "rpc_xray_info": ["gauge", ["version", "lang"]]
+}

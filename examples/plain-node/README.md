@@ -6,7 +6,7 @@ Use Node.js 20.6 or newer and Docker Compose for Prometheus. The app imports `@s
 
 ## Install and run
 
-From this example directory, after the package is published:
+From this example directory:
 
 ```bash
 npm install
@@ -14,7 +14,7 @@ cp .env.example .env
 chmod 600 .env
 ```
 
-Before the first npm release, use the [local package instructions](#test-before-publication) instead of `npm install`, then create `.env` as shown above.
+For unreleased changes, use the [local package instructions](#test-before-publication) instead of `npm install`, then create `.env` as shown above.
 
 Edit `.env`. Set `RPC_URL` to your complete endpoint and `CHAIN` to its label, such as `ethereum`, `base`, or `bsc`. Keep credentials in this ignored file. The chain label is supplied by you, not validated against the endpoint.
 
