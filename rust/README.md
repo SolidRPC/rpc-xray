@@ -72,7 +72,7 @@ The unreleased `XrayLayer` packet adapter has been replaced by `XrayHttp`. Packe
 
 ## Metrics and optional probes
 
-The [shared contract](../spec/README.md) supplies the same labels, buckets, and seven error outcomes as the other SDKs. Unknown methods use `other`. Provider labels contain only the host. Endpoint and metric-series counts are bounded.
+The [shared contract](../spec/README.md) supplies the same labels, buckets, and seven error outcomes as the other SDKs. Unknown methods use `other`. Provider labels contain only the host and any non-default port. Endpoint and metric-series counts are bounded.
 
 The SDK is passive. Supply a chain label explicitly. It does not detect chains, run head probes, or print offers, and exports `rpc_xray_offers_enabled 0`. `Options` accepts `max_body_bytes`, `value_per_request`, and `revenue_per_hour`.
 

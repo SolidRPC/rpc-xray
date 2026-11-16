@@ -11,7 +11,7 @@ Every language package implements this contract and passes `vectors.json`. Alert
 5. A response body is inspected only on a copy and only up to the configured body cap (default 1 MiB). A larger body is classified by HTTP status alone. Native stream adapters also use status alone if the caller closes before finishing or the observed bytes remain encoded. The Python requests adapter observes the chunks requests already decodes for the caller, including gzip, with the cap applied to decoded bytes. Its raw undecoded reads and HTTPX's encoded transport responses retain status-only classification. Request streams that cannot be copied without consumption are skipped. Metrics cannot infer a JSON-RPC error from an unread body.
 6. Only JSON-RPC requests are recorded: a POST whose body is a JSON object or array carrying `method`.
 7. No network calls are made except to the endpoints the application already calls.
-8. Credentials never appear in metrics or logs. The `provider` label is the URL host.
+8. Credentials never appear in metrics or logs. The `provider` label is the URL host, including any non-default port.
 
 ## Outcomes
 
@@ -24,8 +24,8 @@ One outcome per JSON-RPC call. A batch yields one outcome per entry.
 | `rate_limited` | HTTP 429, or a JSON-RPC error that says the caller was throttled |
 | `rpc_error` | HTTP 2xx carrying a JSON-RPC error that is the provider's fault, or a body that is not valid JSON-RPC |
 | `caller_error` | HTTP 2xx carrying a JSON-RPC error caused by the request itself: a revert, invalid parameters, an unknown method, a rejected transaction |
-| `timeout` | The request was aborted or timed out before a response arrived |
-| `network` | The request failed before a response arrived for any other reason |
+| `timeout` | A transport operation was aborted or timed out, including an inspected response-body read in native adapters |
+| `network` | A transport operation failed for another reason, including an inspected response-body read in native adapters |
 
 Classification order for a JSON-RPC error object `{code, message}`:
 
@@ -42,7 +42,7 @@ Batches: each request entry takes the outcome of the response entry with the sam
 | Label | Values |
 |---|---|
 | `chain` | A name from the built-in chain list, `eip155:<id>` for other chains, or `unknown` |
-| `provider` | URL host, lower-cased. `other` once more than 32 endpoints have been seen |
+| `provider` | URL host, lower-cased, including any non-default port. `other` once more than 32 endpoints have been seen |
 | `method` | A name from the built-in method list, `other` for anything else, `batch` on the duration histogram for a batched request |
 | `outcome` | One of the seven outcomes above |
 

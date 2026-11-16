@@ -169,7 +169,7 @@ The JavaScript fetch wrapper keeps its original pass-through behavior:
 - Recording happens after your code has the response. Nothing is awaited on the request path.
 - URLs, headers, bodies, retries and timeouts are never changed.
 - Response bodies are read on a copy and only up to 1 MiB. Larger answers are classified by HTTP status.
-- API keys never reach metrics or logs. The provider label is the host name only.
+- API keys never reach metrics or logs. The provider label contains only the host and any non-default port.
 - rpc-xray makes no network calls except to the endpoints you already use. Nothing is sent to SolidRPC.
 
 Python and Go wrap HTTP transports. They return the underlying response while observing bounded copies as your code reads its body. Rust provides an explicit reqwest response wrapper and an Alloy HTTP transport that observes the original status before decoding packets. These adapters do not add body reads, retries, or deadline changes. Read each SDK's body-consumption notes before using streaming clients. Metrics are available after consumption or closure. The shared [specification](spec/README.md) describes these language boundaries.

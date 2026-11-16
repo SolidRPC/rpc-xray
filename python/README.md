@@ -66,7 +66,7 @@ For other clients, `telemetry.start(url, chain, request_bytes)` returns an optio
 
 ## Metrics and optional probes
 
-The [shared specification](../spec/README.md) defines all names, labels, histogram buckets, and error classifications. A batch counts each RPC call and one HTTP duration. Provider labels contain only the host, never credentials, paths, or query strings. Custom method names fold into `other`. Endpoints and metric series are bounded.
+The [shared specification](../spec/README.md) defines all names, labels, histogram buckets, and error classifications. A batch counts each RPC call and one HTTP duration. Provider labels contain only the host and any non-default port, never credentials, paths, or query strings. Custom method names fold into `other`. Endpoints and metric series are bounded.
 
 The SDK is passive. It does not detect chains, schedule head probes, or print offers. Supply `chain` explicitly or get `unknown`. `rpc_xray_offers_enabled` is always `0`. Optional `value_per_request` and `revenue_per_hour` constructor values enable the corresponding USD gauges.
 
