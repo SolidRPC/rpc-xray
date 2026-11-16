@@ -38,7 +38,13 @@ Expose `telemetry.metrics()` from the same instance at `GET /metrics` with `Cont
 
 The adapters observe buffered POST requests. Streaming request bodies are skipped without reading them. Response bytes are copied as the application consumes the body, up to 1 MiB by default. Complete inspected bodies receive JSON-RPC classification. Oversized or prematurely closed responses use HTTP status only. The adapter never reads ahead, retries, or starts RPC calls. Metrics appear when the body is consumed or closed, so close streamed responses even when you do not read them.
 
-The requests adapter observes bytes already decoded for the caller, including gzip responses. Its body cap applies to the decoded bytes. The HTTPX adapters operate on the transport's encoded stream and do not decompress it, so compressed HTTP 200 JSON-RPC errors use HTTP status alone and can be counted as `ok`. This HTTPX limitation also applies to its async adapter.
+Both HTTPX adapters and the requests adapter observe bytes already decoded for the caller. The body cap applies to decoded bytes, so a small compressed response cannot bypass the inspection limit by expanding into a large body. Instrumentation does not change Accept-Encoding or perform a second decompression.
+
+HTTPX compression works with normal buffered responses and decoded streaming methods, including `read()` / `aread()`, `iter_bytes()` / `aiter_bytes()`, and text or line iteration. The adapter decorates the response's decoded byte iterator and close method while preserving the response object, headers, bytes, and original exceptions. It waits until decoded iteration completes, including the final buffered chunks after the network stream closes, before classifying JSON-RPC content.
+
+Gzip and deflate use HTTPX's built-in decoders. Brotli and Zstandard work when supported by the installed HTTPX version and its optional decoder dependencies. See [HTTPX response decoding](https://www.python-httpx.org/quickstart/#binary-response-content) for installation details. RPC X-Ray adds no runtime decoder dependency. An HTTPX decoding failure during inspection counts as `rpc_error` and still raises the original `httpx.DecodingError` to the application.
+
+Raw `iter_raw()` / `aiter_raw()` reads retain their original wire bytes. Compressed raw reads, unread or partially consumed responses, and bodies exceeding the decoded cap use HTTP status alone. Repeated reads and closes do not count a request again. These boundaries apply equally to sync and async clients.
 
 ## requests and web3.py
 
@@ -81,6 +87,7 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -e './python[test,requests]'
 .venv/bin/python -m pytest python/tests
 .venv/bin/python -m build python
+.venv/bin/python scripts/test-example.py python --gzip
 ```
 
-Tests use the shared classification vectors and local mock transports. Building the wheel and source distribution does not publish them.
+Tests use shared classification vectors, real local HTTP fixtures, and mock transports. The gzip example check runs the complete async app, verifies error counters and recovery through `/metrics`, and stops it afterward. CI runs the compression tests against both the minimum supported HTTPX version and the latest compatible version, including a freshly installed wheel. Building the wheel and source distribution does not publish them.

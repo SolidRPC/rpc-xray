@@ -1,4 +1,5 @@
 import argparse
+import gzip
 import json
 import os
 from pathlib import Path
@@ -15,6 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 parser = argparse.ArgumentParser()
 parser.add_argument("language", choices=["python", "go", "rust", "go-ethereum", "alloy"])
+parser.add_argument("--gzip", action="store_true")
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[1]
 calls = []
@@ -36,8 +38,12 @@ class Mock(BaseHTTPRequestHandler):
         else:
             response["result"] = "0x10"
         body = json.dumps(response).encode()
+        if args.gzip:
+            body = gzip.compress(body)
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
+        if args.gzip:
+            self.send_header("Content-Encoding", "gzip")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
