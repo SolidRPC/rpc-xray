@@ -75,7 +75,23 @@ jobs:
           docker run --rm -v "$PWD:/repo:ro" --entrypoint promtool prom/prometheus:v3.0.1 test rules /repo/alerts/tests/rules_test.yml /repo/alerts/tests/offer_test.yml /repo/alerts/tests/healthy_test.yml /repo/dashboard-tests.json
           docker compose -f stack/docker-compose.yml config --quiet
           docker compose -f examples/plain-node/compose.yml config --quiet
+      - name: Check version for publication preview
+        id: availability
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+        run: |
+          node --input-type=module <<'JS'
+          import { appendFile } from 'node:fs/promises';
+          import { shouldDryRunPublish } from './scripts/release/metadata.mjs';
+          const response = await fetch(`https://registry.npmjs.org/@solidrpc%2frpc-xray/${process.env.VERSION}`, {
+            signal: AbortSignal.timeout(10_000),
+          });
+          const available = shouldDryRunPublish(response.status, process.env.GITHUB_EVENT_NAME);
+          await appendFile(process.env.GITHUB_OUTPUT, `available=${available}\n`);
+          if (!available) console.log('This version is already published. PR package validation passed, so only the publication dry run is skipped.');
+          JS
       - name: Dry-run publication
+        if: steps.availability.outputs.available == 'true'
         working-directory: js
         env:
           TARBALL: ${{ steps.metadata.outputs.filename }}

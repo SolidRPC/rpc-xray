@@ -96,6 +96,19 @@ fn outcome(value: &Value) -> &'static str {
     }
 }
 
+fn id_key(value: &Value) -> String {
+    if let Value::Number(number) = value {
+        if number.is_f64() {
+            if let Some(number) = number.as_f64() {
+                if number.fract() == 0.0 {
+                    return format!("{number:.0}");
+                }
+            }
+        }
+    }
+    value.to_string()
+}
+
 pub(crate) fn classify(
     request: &Request,
     status: u16,
@@ -135,7 +148,7 @@ pub(crate) fn classify(
         .filter(|item| item.is_object())
         .map(|item| {
             (
-                item.get("id").unwrap_or(&Value::Null).to_string(),
+                id_key(item.get("id").unwrap_or(&Value::Null)),
                 outcome(item),
             )
         })
@@ -146,7 +159,7 @@ pub(crate) fn classify(
         .map(|(id, method)| Entry {
             method: method.clone(),
             outcome: by_id
-                .get(&id.to_string())
+                .get(&id_key(id))
                 .copied()
                 .unwrap_or("rpc_error")
                 .to_owned(),

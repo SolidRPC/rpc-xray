@@ -2,7 +2,7 @@
 
 The [npm release workflow](.github/workflows/release.yml) publishes `@solidrpc/rpc-xray` from `js/`. Publication requires a manual run on `main`, the exact version from `js/package.json`, and an explicitly selected `publish` checkbox. The checkbox defaults to false. Pushes, tags and GitHub releases do not trigger publication.
 
-Pull requests that change the package or release workflow run its packaging checks automatically. The publish job is skipped for every pull request, including forks. Packaging runs without npm credentials or OIDC write permission.
+Pull requests that change the package or release workflow run its packaging checks automatically. When the current version is already published, PR validation still builds and tests the tarball and skips only `npm publish --dry-run`, which npm otherwise rejects as a duplicate version. New versions receive that dry run too. Manual release runs require an unpublished version. Registry errors fail validation. The publish job is skipped for every pull request, including forks. Packaging runs without npm credentials or OIDC write permission.
 
 ## Authentication
 

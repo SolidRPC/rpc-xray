@@ -25,6 +25,12 @@ def _invalid_constant(_):
     raise ValueError("Invalid JSON constant")
 
 
+def _id_key(value):
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+
 def parse_request(body):
     try:
         payload = json.loads(body, parse_constant=_invalid_constant)
@@ -36,7 +42,7 @@ def parse_request(body):
             return None
         return isinstance(payload, list), [
             (
-                json.dumps(c.get("id"), sort_keys=True, separators=(",", ":")),
+                _id_key(c.get("id")),
                 c["method"] if c["method"] in METHODS else "other",
             )
             for c in calls
@@ -89,7 +95,7 @@ def classify(request, status=200, body=None, failure=None):
     if not isinstance(payload, list):
         return all_calls(outcome(payload))
     by_id = {
-        json.dumps(item.get("id"), sort_keys=True, separators=(",", ":")): outcome(item)
+        _id_key(item.get("id")): outcome(item)
         for item in payload
         if isinstance(item, dict)
     }

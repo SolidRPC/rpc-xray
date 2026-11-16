@@ -49,6 +49,19 @@ type request struct {
 	calls []call
 }
 
+func idKey(value any) string {
+	if number, ok := value.(json.Number); ok {
+		if integer, err := number.Int64(); err == nil {
+			return strconv.FormatInt(integer, 10)
+		}
+		if numeric, err := number.Float64(); err == nil {
+			return strconv.FormatFloat(numeric, 'f', -1, 64)
+		}
+	}
+	encoded, _ := json.Marshal(value)
+	return string(encoded)
+}
+
 func parseRequest(body []byte) *request {
 	var payload any
 	decoder := json.NewDecoder(strings.NewReader(string(body)))
@@ -83,8 +96,7 @@ func parseRequest(body []byte) *request {
 		if !known {
 			method = "other"
 		}
-		id, _ := json.Marshal(object["id"])
-		r.calls = append(r.calls, call{string(id), method})
+		r.calls = append(r.calls, call{idKey(object["id"]), method})
 	}
 	return r
 }
@@ -181,8 +193,7 @@ func classify(r *request, status int, body []byte, failure string) []Entry {
 		decoder := json.NewDecoder(strings.NewReader(string(id)))
 		decoder.UseNumber()
 		_ = decoder.Decode(&normalized)
-		encoded, _ := json.Marshal(normalized)
-		byID[string(encoded)] = responseOutcome(item)
+		byID[idKey(normalized)] = responseOutcome(item)
 	}
 	entries := all("rpc_error")
 	for i, c := range r.calls {
