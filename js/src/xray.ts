@@ -8,7 +8,7 @@ import {
 } from "./classify.js";
 import { Registry, type GaugeSample } from "./registry.js";
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.1.1";
 
 const MAX_ENDPOINTS = 32;
 const MAX_PENDING = 2000;

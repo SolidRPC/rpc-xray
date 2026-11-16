@@ -1,6 +1,6 @@
 {
   "name": "@solidrpc/rpc-xray",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "See every request your RPC provider failed. A pass-through wrapper that measures real JSON-RPC traffic.",
   "license": "Apache-2.0",
   "type": "module",

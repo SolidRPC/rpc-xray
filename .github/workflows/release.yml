@@ -128,7 +128,6 @@ jobs:
       - name: Publish the tested tarball with provenance
         working-directory: js
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           TARBALL: ${{ needs.package.outputs.filename }}
         run: npm publish "../release-package/js/$TARBALL" --ignore-scripts --access public --provenance --tag latest --registry=https://registry.npmjs.org
       - name: Verify registry integrity and package imports
@@ -139,15 +138,19 @@ jobs:
           import { readFile } from 'node:fs/promises';
           const [packed] = JSON.parse(await readFile('release-package/package-manifest.json', 'utf8'));
           let verified = false;
-          for (let attempt = 0; attempt < 5; attempt++) {
-            const response = await fetch(`https://registry.npmjs.org/@solidrpc%2frpc-xray/${process.env.VERSION}`);
+          const deadline = Date.now() + 5 * 60_000;
+          while (Date.now() < deadline) {
+            const response = await fetch(`https://registry.npmjs.org/@solidrpc%2frpc-xray/${process.env.VERSION}`, {
+              headers: { 'cache-control': 'no-cache' },
+              signal: AbortSignal.timeout(10_000),
+            });
             if (response.ok) {
               const published = await response.json();
               if (published.dist.integrity !== packed.integrity) throw new Error('Published tarball integrity differs from the tested artifact');
               verified = true;
               break;
             }
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            await new Promise(resolve => setTimeout(resolve, 5000));
           }
           if (!verified) throw new Error('Publication returned successfully but registry verification is pending. Check npm before retrying.');
           JS
