@@ -208,3 +208,95 @@ func TestMetricContract(t *testing.T) {
 		t.Fatal(x.Metrics())
 	}
 }
+
+func gaugeLine(x *Xray, name, provider string) string {
+	prefix := name + `{chain="ethereum",provider="` + provider + `"} `
+	for _, line := range strings.Split(x.Metrics(), "\n") {
+		if strings.HasPrefix(line, prefix) {
+			return strings.TrimPrefix(line, prefix)
+		}
+	}
+	return ""
+}
+
+func TestPassiveHeadFromBlockNumberAnswers(t *testing.T) {
+	x := New(Options{})
+	x.Start("https://rpc.example", "ethereum", []byte(`{"id":1,"method":"eth_blockNumber"}`)).Finish(200, []byte(`{"id":1,"result":"0x10"}`), "")
+	if got := gaugeLine(x, "rpc_xray_head_block", "rpc.example"); got != "16" {
+		t.Fatal(got, x.Metrics())
+	}
+	x.Start("https://rpc.example", "ethereum", []byte(`[{"id":"a","method":"eth_call"},{"id":"b","method":"eth_blockNumber"}]`)).Finish(200, []byte(`[{"id":"b","result":"0x20"},{"id":"a","result":"0x99"}]`), "")
+	for _, body := range []string{`{"id":1,"result":"0x1"}`, `{"id":1,"result":"latest"}`, `{"id":1,"error":{"code":-32000,"message":"x"}}`} {
+		x.Start("https://rpc.example", "ethereum", []byte(`{"id":1,"method":"eth_blockNumber"}`)).Finish(200, []byte(body), "")
+	}
+	x.Start("https://rpc.example", "ethereum", []byte(`{"id":1,"method":"eth_blockNumber"}`)).Finish(500, []byte(`{"id":1,"result":"0x99"}`), "")
+	if got := gaugeLine(x, "rpc_xray_head_block", "rpc.example"); got != "32" {
+		t.Fatal(got)
+	}
+	x.Start("https://other.example", "ethereum", []byte(`{"id":1,"method":"eth_call"}`)).Finish(200, []byte(`{"id":1,"result":"0x99"}`), "")
+	if gaugeLine(x, "rpc_xray_head_block", "other.example") != "" || strings.Contains(x.Metrics(), "rpc_xray_probe_requests_total") {
+		t.Fatal(x.Metrics())
+	}
+}
+
+func TestPassiveHeadExpiresWhenAppStopsPolling(t *testing.T) {
+	x := New(Options{})
+	finish := func() {
+		x.Start("https://rpc.example", "ethereum", []byte(requestBody)).Finish(200, []byte(successBody), "")
+	}
+	finish()
+	for base, state := range x.heads {
+		state.advanced = state.advanced.Add(-600 * time.Second)
+		state.seen = state.seen.Add(-600 * time.Second)
+		x.heads[base] = state
+	}
+	if gaugeLine(x, "rpc_xray_head_age_seconds", "rpc.example") != "" {
+		t.Fatal(x.Metrics())
+	}
+	finish()
+	if gaugeLine(x, "rpc_xray_head_age_seconds", "rpc.example") == "" || !x.staleSeen {
+		t.Fatal(x.Metrics())
+	}
+}
+
+func TestOfferEnabledByDefaultAndLoggedOnce(t *testing.T) {
+	lines := []string{}
+	x := New(Options{Logger: func(line string) { lines = append(lines, line) }})
+	if !strings.Contains(x.Metrics(), "rpc_xray_offers_enabled 1") {
+		t.Fatal(x.Metrics())
+	}
+	finish := func() {
+		x.Start("https://rpc.example", "ethereum", []byte(requestBody)).Finish(200, []byte(successBody), "")
+	}
+	x.started = x.started.Add(-24 * time.Hour)
+	x.total, x.failed = 39_999_999, 500_000
+	finish()
+	finish()
+	x.total = 49_999_999
+	finish()
+	if len(lines) != 1 || !strings.Contains(lines[0], "hello@solidrpc.io") || !strings.Contains(lines[0], "DisableOffers") {
+		t.Fatal(lines)
+	}
+}
+
+func TestOfferRequiresProblemsVolumeAndConsent(t *testing.T) {
+	lines := []string{}
+	logger := func(line string) { lines = append(lines, line) }
+	run := func(x *Xray, uptime time.Duration, total, failed uint64) {
+		x.started = x.started.Add(-uptime)
+		x.total, x.failed = total, failed
+		x.Start("https://rpc.example", "ethereum", []byte(requestBody)).Finish(200, []byte(successBody), "")
+	}
+	run(New(Options{Logger: logger}), 24*time.Hour, 39_999_999, 0)
+	run(New(Options{Logger: logger}), 30*24*time.Hour, 9_999, 5_000)
+	off := New(Options{DisableOffers: true, Logger: logger})
+	run(off, 24*time.Hour, 39_999_999, 5_000_000)
+	if len(lines) != 0 || !strings.Contains(off.Metrics(), "rpc_xray_offers_enabled 0") {
+		t.Fatal(lines)
+	}
+	panicky := New(Options{Logger: func(string) { panic("logger down") }})
+	run(panicky, 24*time.Hour, 39_999_999, 5_000_000)
+	if !panicky.offered {
+		t.Fatal("offer not attempted")
+	}
+}

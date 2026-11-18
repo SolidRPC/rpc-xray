@@ -2,7 +2,7 @@
 
 **See every request your RPC provider failed.**
 
-Instrument your existing HTTP JSON-RPC client. rpc-xray counts errors and slow calls, measures stale blocks when head probes are enabled, and exports the results to Prometheus.
+Add three lines of code. rpc-xray counts the errors, stale blocks and slow calls your users hit, and shows what they have cost you so far.
 
 ![A red line of failed user requests climbs while a flat green line shows where it should be](assets/hero.png)
 
@@ -49,7 +49,7 @@ All four SDKs use the same metric names, labels, histogram buckets, and error cl
 
 Each SDK README leads with its intended package install command and includes local package instructions for unreleased versions. Every example has `/metrics`, shutdown handling, and a matching Prometheus config. Run one example at a time on the default port 9464, or assign separate ports and scrape targets.
 
-The new Python, Go, and Rust SDKs are passive by default. They make no discovery or probe calls and do not print offer messages. Supply a chain label explicitly. Application-managed probe observations can enable the same head metrics. JavaScript retains its existing discovery and probe defaults, described below.
+Python, Go, and Rust add no RPC calls of their own. They read the chain head from the `eth_blockNumber` answers your application already receives, so a stale or lagging provider shows up as soon as your app polls the head. Supply a chain label explicitly. If your app never calls `eth_blockNumber`, record a separate probe with `record_probe` or `RecordProbe`. JavaScript detects chains and probes heads itself, described below.
 
 ## Add it with a coding agent
 
@@ -70,7 +70,8 @@ Integrate RPC X-Ray using https://github.com/SolidRPC/rpc-xray.
    probeIntervalSeconds: 0 AND supply the correct chain for every endpoint.
    Explain that head freshness and lag are then unmeasured. Otherwise document
    the eth_chainId detection calls and eth_blockNumber probe overhead.
-   Python, Go, and Rust are passive and require explicit chain labels.
+   Python, Go, and Rust add no RPC calls and require explicit chain labels.
+   They measure head freshness from the app's own eth_blockNumber answers.
 5. Expose GET /metrics once per process using the same registry that wraps
    the client. In JavaScript, use serveMetrics for the shared registry or
    export your Xray instance's metrics(). Python and Rust export
@@ -182,7 +183,7 @@ For **zero additional RPC calls**, set `probeIntervalSeconds: 0` and supply an e
 
 rpc-xray is built by [SolidRPC](https://solidrpc.io). If you send about 100M requests a month and rpc-xray recorded incidents in the last 7 days, the dashboard, one Slack message and one log line will tell you that SolidRPC offers a 14-day free trial or $100 credit. To take it, email hello@solidrpc.io.
 
-Nothing is sent to us. Set `offers: false` to turn the message off.
+The offer is on by default in all four SDKs and checked inside your process. Nothing is sent to us. To turn it off, set `offers: false` in JavaScript and Rust, `offers=False` in Python, or `DisableOffers: true` in Go.
 
 ## Configuration
 

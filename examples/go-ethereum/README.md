@@ -25,7 +25,7 @@ set +a
 ../../tmp/rpc-xray-go-ethereum
 ```
 
-The app listens on `127.0.0.1:9464`. It sends only `eth_blockNumber`, with no chain discovery, head probes, application retries, or overlapping polls. Each call has a 4.5 second deadline. `/metrics` uses the same registry as the transport and adds no RPC requests. Head freshness and lag are unmeasured because the app does not run separate probes.
+The app listens on `127.0.0.1:9464`. It sends only `eth_blockNumber`, with no chain discovery, head probes, application retries, or overlapping polls. Each call has a 4.5 second deadline. `/metrics` uses the same registry as the transport and adds no RPC requests. Head gauges come from the app's own `eth_blockNumber` answers, so stale-head and lag incidents work with no extra calls.
 
 ```bash
 curl http://127.0.0.1:9464/

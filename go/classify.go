@@ -203,3 +203,52 @@ func classify(r *request, status int, body []byte, failure string) []Entry {
 	}
 	return entries
 }
+
+func hexHead(value any) (uint64, bool) {
+	text, ok := value.(string)
+	if !ok || len(text) < 3 || len(text) > 18 || text[:2] != "0x" {
+		return 0, false
+	}
+	head, err := strconv.ParseUint(text[2:], 16, 64)
+	return head, err == nil
+}
+
+func headFrom(r *request, body []byte) (uint64, bool) {
+	if r == nil || body == nil {
+		return 0, false
+	}
+	ids := map[string]bool{}
+	for _, c := range r.calls {
+		if c.method == "eth_blockNumber" {
+			ids[c.id] = true
+		}
+	}
+	if len(ids) == 0 {
+		return 0, false
+	}
+	var payload any
+	decoder := json.NewDecoder(strings.NewReader(string(body)))
+	decoder.UseNumber()
+	if decoder.Decode(&payload) != nil {
+		return 0, false
+	}
+	items, batch := payload.([]any)
+	if !batch {
+		items = []any{payload}
+	}
+	var best uint64
+	found := false
+	for _, item := range items {
+		object, ok := item.(map[string]any)
+		if !ok || object["error"] != nil {
+			continue
+		}
+		if batch && !ids[idKey(object["id"])] {
+			continue
+		}
+		if head, ok := hexHead(object["result"]); ok && (!found || head > best) {
+			best, found = head, true
+		}
+	}
+	return best, found
+}

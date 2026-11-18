@@ -194,11 +194,11 @@ fn probes_metrics_bounds_and_shared_clones() {
     }
     assert!(xray.metrics().contains("outcome=\"ok\"} 200"));
     xray.record_probe("https://rpc.example", "ethereum", Some(10));
-    xray.record_probe("https://second.example", "ethereum", Some(12));
+    xray.record_probe("https://second.example", "ethereum", Some(20));
     xray.record_probe("https://rpc.example", "ethereum", None);
     assert!(xray
         .metrics()
-        .contains("rpc_xray_head_lag_blocks{chain=\"ethereum\",provider=\"rpc.example\"} 2"));
+        .contains("rpc_xray_head_lag_blocks{chain=\"ethereum\",provider=\"rpc.example\"} 4"));
     for i in 0..40 {
         xray.start(
             &format!("https://rpc{i}.example"),

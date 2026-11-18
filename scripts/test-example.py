@@ -112,7 +112,9 @@ try:
         assert headers["Content-Type"].startswith("text/plain; version=0.0.4")
         assert "fixture-secret" not in metrics
         assert 'outcome="ok"' in metrics
-        assert "rpc_xray_head_block" not in metrics
+        assert 'rpc_xray_head_block{chain="ethereum",provider="127.0.0.1:' in metrics
+        assert "rpc_xray_probe_requests_total" not in metrics
+        assert "rpc_xray_offers_enabled 1" in metrics
         with lock:
             snapshot = list(calls)
         assert all(call["method"] == "eth_blockNumber" for _, call in snapshot)

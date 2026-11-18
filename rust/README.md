@@ -74,9 +74,15 @@ The unreleased `XrayLayer` packet adapter has been replaced by `XrayHttp`. Packe
 
 The [shared contract](../spec/README.md) supplies the same labels, buckets, and seven error outcomes as the other SDKs. Unknown methods use `other`. Provider labels contain only the host and any non-default port. Endpoint and metric-series counts are bounded.
 
-The SDK is passive. Supply a chain label explicitly. It does not detect chains, run head probes, or print offers, and exports `rpc_xray_offers_enabled 0`. `Options` accepts `max_body_bytes`, `value_per_request`, and `revenue_per_hour`.
+The SDK adds no RPC calls. Supply a chain label explicitly. It does not detect chains or run head probes. `Options` accepts `max_body_bytes`, `value_per_request`, `revenue_per_hour`, `offers`, and `logger`.
 
-For application-managed probes, call `telemetry.record_probe(url, chain, Some(head))` or `None` on failure after a separate unwrapped probe. These observations enable head, head age, last advance, and lag gauges and increment only the probe counter. With no observations, head gauges remain absent. Scraping metrics never contacts an RPC endpoint.
+Head freshness comes from traffic you already send. When a wrapped request includes `eth_blockNumber` and the answer is a successful hex block number, that block updates the head, head age, last-advance and lag gauges for that chain and provider. A batch entry counts too. No extra request is made. Head gauges are exported while observations stay fresh, up to 120 seconds after the last one, so an app that stops polling does not raise a false stale-head incident. Lag needs two or more providers for the same chain. Alloy's `get_block_number` sends `eth_blockNumber`, so most Alloy apps get head metrics with no change.
+
+If your app never calls `eth_blockNumber`, call `telemetry.record_probe(url, chain, Some(head))`, or `None` on failure, after a separate unwrapped probe. Probe results are also counted in `rpc_xray_probe_requests_total`. With no head observations, head gauges remain absent. Scraping metrics never contacts an RPC endpoint.
+
+## The SolidRPC offer
+
+`rpc_xray_offers_enabled` is `1` by default. When this process has run for a day, projects about 100M requests a month, and saw at least 1% failed requests or a stale head, it writes one line to stderr naming the 14-day free trial or $100 credit from SolidRPC and hello@solidrpc.io. It is written once per process. The dashboard and Slack offer use the same gauge. Set `Options.logger` to send the line elsewhere, or `offers: false` to turn the offer off everywhere. Nothing is sent to SolidRPC.
 
 ## Test and package
 

@@ -72,9 +72,19 @@ Batches: each request entry takes the outcome of the response entry with the sam
 
 JavaScript polls each endpoint with `eth_blockNumber` every `probeIntervalSeconds` (default 15, `0` turns the probe off). Supply an explicit chain as well to disable its chain discovery calls.
 
-Python, Go, and Rust are passive and never schedule probes or discover chains. Applications can record results from their own separate, unwrapped head probes with `record_probe` / `RecordProbe`. A failed probe increments the `error` result and leaves the last known head intact. A successful head higher than the previous head updates the last-advance timestamp. Probe calls are counted only in `rpc_xray_probe_requests_total`. Without successful observations, head gauges are absent. Native SDKs aggregate head observations by chain and provider host, so use distinct hosts if individual routes need independent head measurements.
+Python, Go, and Rust never schedule probes or discover chains. They read the head passively: when a wrapped exchange succeeds (no transport failure, HTTP status below 400, body inspected) and a call to `eth_blockNumber` is answered with a `result` that is a `0x`-prefixed hex string of 1 to 16 digits and no `error`, that block is a head observation. In a batch, only response entries whose `id` matches an `eth_blockNumber` request entry count, and the highest one is used. Passive observations are not counted in `rpc_xray_probe_requests_total`.
 
-Native SDKs export `rpc_xray_offers_enabled 0` and do not print promotional messages. Their `rpc_xray_info` language values are `python`, `go`, and `rust`. JavaScript retains `js` and its configurable offer behavior. Each SDK reports its own package version.
+Applications that never call `eth_blockNumber` can record results from their own separate, unwrapped head probes with `record_probe` / `RecordProbe`. A failed probe increments the `error` result and leaves the last known head intact. Probe calls are counted only in `rpc_xray_probe_requests_total`.
+
+For both sources, a head higher than the previous head updates the last-advance timestamp. Every head observation refreshes a last-seen time. Native SDKs export the four head gauges only for endpoints observed within the last 120 seconds, and compute lag among those endpoints only. This keeps an application that stops polling from raising a false stale-head incident, while an application that keeps polling a frozen provider still sees the head age grow. Without recent observations, head gauges are absent. Native SDKs aggregate head observations by chain and provider host, so use distinct hosts if individual routes need independent head measurements.
+
+## Offer
+
+All four SDKs export `rpc_xray_offers_enabled 1` unless the application turns offers off (`offers: false` in JavaScript and Rust, `offers=False` in Python, `DisableOffers: true` in Go). The `RpcXrayTrialOffer` alert requires this gauge to be `1`.
+
+Each SDK also writes at most one log line per process. The check runs once per 10,000 recorded calls and needs all of: at least 24 hours since the registry was created, a projected 30-day volume of at least 100M calls, and either at least 1% of calls in a failure outcome (`http_error`, `rate_limited`, `rpc_error`, `timeout`, `network`) or a stale head seen (an observation where the head had not advanced for more than 180 seconds). The line names the 14-day free trial or $100 credit and hello@solidrpc.io, and says how to turn it off. JavaScript writes it with `console.info`, Python to the `rpc_xray` logger at WARNING, Go through the standard `log` package, and Rust to stderr. Each accepts a custom logger. A logger failure never reaches the application. Nothing is sent to SolidRPC.
+
+`rpc_xray_info` language values are `js`, `python`, `go`, and `rust`. Each SDK reports its own package version.
 
 ## Shared sources and conformance
 

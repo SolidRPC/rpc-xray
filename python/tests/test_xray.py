@@ -191,7 +191,7 @@ def test_probe_metrics_concurrency_and_limits():
         thread.join()
     assert 'outcome="ok"} 200' in xray.metrics()
     xray.record_probe("https://rpc.example/secret", "ethereum", 10)
-    xray.record_probe("https://second.example", "ethereum", 12)
+    xray.record_probe("https://second.example", "ethereum", 20)
     xray.record_probe("https://rpc.example/secret", "ethereum", None)
     values = samples(xray)
     lag = next(
@@ -200,7 +200,7 @@ def test_probe_metrics_concurrency_and_limits():
         if s.name == "rpc_xray_head_lag_blocks"
         and s.labels["provider"] == "rpc.example"
     )
-    assert lag.value == 2
+    assert lag.value == 4
     assert len([s for s in values if s.name.endswith("duration_seconds_bucket")]) == 10
     for i in range(40):
         xray.start(f"https://rpc{i}.example", "ethereum", REQUEST).finish(200, OK)
@@ -270,3 +270,92 @@ def test_metric_contract():
     if path := os.environ.get("RPC_XRAY_METRICS_FIXTURE"):
         Path(path).write_text(xray.metrics())
     assert len(list(text_string_to_metric_families(xray.metrics()))) == 12
+
+
+def gauge(xray, name, provider="rpc.example"):
+    return next(
+        (
+            s.value
+            for s in samples(xray)
+            if s.name == name and s.labels.get("provider") == provider
+        ),
+        None,
+    )
+
+
+def test_passive_head_from_block_number_answers():
+    xray = Xray()
+    xray.start("https://rpc.example", "ethereum", REQUEST).finish(200, OK)
+    assert gauge(xray, "rpc_xray_head_block") == 16
+    batch = b'[{"id":"a","method":"eth_call"},{"id":"b","method":"eth_blockNumber"}]'
+    answer = b'[{"id":"b","result":"0x20"},{"id":"a","result":"0x99"}]'
+    xray.start("https://rpc.example", "ethereum", batch).finish(200, answer)
+    assert gauge(xray, "rpc_xray_head_block") == 32
+    for body in (
+        b'{"id":1,"result":"0x1"}',
+        b'{"id":1,"result":"latest"}',
+        b'{"id":1,"error":{"code":-32000,"message":"x"}}',
+    ):
+        xray.start("https://rpc.example", "ethereum", REQUEST).finish(200, body)
+    xray.start("https://rpc.example", "ethereum", REQUEST).finish(500, b'{"id":1,"result":"0x99"}')
+    assert gauge(xray, "rpc_xray_head_block") == 32
+    call = b'{"id":1,"method":"eth_call"}'
+    xray.start("https://other.example", "ethereum", call).finish(200, b'{"id":1,"result":"0x99"}')
+    assert gauge(xray, "rpc_xray_head_block", "other.example") is None
+    assert gauge(xray, "rpc_xray_probe_requests_total") is None
+
+
+def test_passive_head_expires_when_app_stops_polling():
+    xray = Xray()
+    xray.start("https://rpc.example", "ethereum", REQUEST).finish(200, OK)
+    base = next(iter(xray._heads))
+    head, advanced, seen = xray._heads[base]
+    xray._heads[base] = (head, advanced - 600, seen - 600)
+    assert gauge(xray, "rpc_xray_head_age_seconds") is None
+    xray.start("https://rpc.example", "ethereum", REQUEST).finish(200, OK)
+    assert gauge(xray, "rpc_xray_head_age_seconds") >= 600
+    assert xray._stale_seen
+
+
+def test_offer_enabled_by_default_and_logged_once():
+    lines = []
+    xray = Xray(logger=lines.append)
+    assert gauge(xray, "rpc_xray_offers_enabled", None) == 1
+    xray._started -= 24 * 3600
+    xray._total, xray._failed = 39_999_999, 500_000
+    for _ in range(3):
+        xray.start("https://rpc.example", "ethereum", REQUEST).finish(200, OK)
+    xray._total = 49_999_999
+    xray.start("https://rpc.example", "ethereum", REQUEST).finish(200, OK)
+    assert len(lines) == 1
+    assert "hello@solidrpc.io" in lines[0] and "offers=False" in lines[0]
+    assert "\u2014" not in lines[0]
+
+
+def test_offer_requires_problems_and_volume():
+    lines = []
+    healthy = Xray(logger=lines.append)
+    healthy._started -= 24 * 3600
+    healthy._total = 39_999_999
+    healthy.start("https://rpc.example", "ethereum", REQUEST).finish(200, OK)
+    quiet = Xray(logger=lines.append)
+    quiet._started -= 30 * 24 * 3600
+    quiet._total, quiet._failed = 9_999, 5_000
+    quiet.start("https://rpc.example", "ethereum", REQUEST).finish(200, OK)
+    off = Xray(offers=False, logger=lines.append)
+    off._started -= 24 * 3600
+    off._total, off._failed = 39_999_999, 5_000_000
+    off.start("https://rpc.example", "ethereum", REQUEST).finish(200, OK)
+    assert lines == []
+    assert gauge(off, "rpc_xray_offers_enabled", None) == 0
+
+
+def test_offer_logger_failure_is_swallowed():
+    def boom(_):
+        raise RuntimeError("logger down")
+
+    xray = Xray(logger=boom)
+    xray._started -= 24 * 3600
+    xray._total, xray._failed = 39_999_999, 5_000_000
+    xray.start("https://rpc.example", "ethereum", REQUEST).finish(200, OK)
+    assert xray._offered

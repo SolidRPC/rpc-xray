@@ -74,9 +74,15 @@ For other clients, `telemetry.start(url, chain, request_bytes)` returns an optio
 
 The [shared specification](../spec/README.md) defines all names, labels, histogram buckets, and error classifications. A batch counts each RPC call and one HTTP duration. Provider labels contain only the host and any non-default port, never credentials, paths, or query strings. Custom method names fold into `other`. Endpoints and metric series are bounded.
 
-The SDK is passive. It does not detect chains, schedule head probes, or print offers. Supply `chain` explicitly or get `unknown`. `rpc_xray_offers_enabled` is always `0`. Optional `value_per_request` and `revenue_per_hour` constructor values enable the corresponding USD gauges.
+The SDK adds no RPC calls. It does not detect chains or schedule probes. Supply `chain` explicitly or get `unknown`. Optional `value_per_request` and `revenue_per_hour` constructor values enable the corresponding USD gauges.
 
-If your application deliberately runs a separate head probe, record its result with `telemetry.record_probe(url, chain, head)` or `head=None` for failure. Use an unwrapped client for that probe so it is counted only in `rpc_xray_probe_requests_total`. This enables the four head gauges. Without probe observations those gauges are absent, not zero. Scraping metrics never sends a probe.
+Head freshness comes from traffic you already send. When a wrapped request includes `eth_blockNumber` and the answer is a successful hex block number, that block updates the head, head age, last-advance and lag gauges for that chain and provider. A batch entry counts too. No extra request is made. Head gauges are exported while observations stay fresh, up to 120 seconds after the last one, so an app that stops polling does not raise a false stale-head incident. Lag needs two or more providers for the same chain.
+
+If your application never calls `eth_blockNumber`, run a separate head probe through an unwrapped client and record it with `telemetry.record_probe(url, chain, head)`, or `head=None` for failure. Probe results are also counted in `rpc_xray_probe_requests_total`. Without any head observations those gauges are absent, not zero. Scraping metrics never sends a request.
+
+## The SolidRPC offer
+
+`rpc_xray_offers_enabled` is `1` by default. When this process has run for a day, projects about 100M requests a month, and saw at least 1% failed requests or a stale head, it writes one line to the `rpc_xray` logger at WARNING level naming the 14-day free trial or $100 credit from SolidRPC and hello@solidrpc.io. It is written once per process. The dashboard and Slack offer use the same gauge. Pass `logger=` to send the line elsewhere, or `offers=False` to turn the offer off everywhere. Nothing is sent to SolidRPC.
 
 ## Test and package
 

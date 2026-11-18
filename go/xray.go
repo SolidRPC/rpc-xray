@@ -2,6 +2,7 @@ package rpcxray
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"net/url"
 	"sort"
@@ -14,10 +15,22 @@ import (
 const Version = "0.1.0"
 const ContentType = "text/plain; version=0.0.4; charset=utf-8"
 
+const (
+	staleSeconds          = 180
+	headFreshSeconds      = 120
+	offerMonthlyRequests  = 100_000_000
+	offerMinUptimeSeconds = 24 * 3600
+	offerFailureRatio     = 0.01
+)
+
+var failures = map[string]bool{"http_error": true, "rate_limited": true, "rpc_error": true, "timeout": true, "network": true}
+
 type Options struct {
 	MaxBodyBytes    int
 	ValuePerRequest *float64
 	RevenuePerHour  *float64
+	DisableOffers   bool
+	Logger          func(string)
 }
 type labels struct{ chain, provider, method, outcome string }
 type counterKey struct {
@@ -32,6 +45,7 @@ type histogram struct {
 type headState struct {
 	block    uint64
 	advanced time.Time
+	seen     time.Time
 }
 type Xray struct {
 	mu         sync.Mutex
@@ -40,13 +54,63 @@ type Xray struct {
 	counters   map[counterKey]float64
 	histograms map[labels]*histogram
 	heads      map[labels]headState
+	started    time.Time
+	total      uint64
+	failed     uint64
+	staleSeen  bool
+	offered    bool
 }
 
 func New(options Options) *Xray {
 	if options.MaxBodyBytes <= 0 {
 		options.MaxBodyBytes = 1024 * 1024
 	}
-	return &Xray{options: options, endpoints: map[string]labels{}, counters: map[counterKey]float64{}, histograms: map[labels]*histogram{}, heads: map[labels]headState{}}
+	return &Xray{options: options, endpoints: map[string]labels{}, counters: map[counterKey]float64{}, histograms: map[labels]*histogram{}, heads: map[labels]headState{}, started: time.Now()}
+}
+
+func (x *Xray) observeHead(base labels, head uint64) {
+	if base.provider == "other" {
+		return
+	}
+	now := time.Now()
+	previous, exists := x.heads[base]
+	if !exists || head > previous.block {
+		x.heads[base] = headState{head, now, now}
+		return
+	}
+	if now.Sub(previous.advanced).Seconds() > staleSeconds {
+		x.staleSeen = true
+	}
+	previous.seen = now
+	x.heads[base] = previous
+}
+
+func (x *Xray) offerLine() string {
+	if x.offered || x.options.DisableOffers || x.total == 0 {
+		return ""
+	}
+	uptime := time.Since(x.started).Seconds()
+	if uptime < offerMinUptimeSeconds {
+		return ""
+	}
+	monthly := float64(x.total) / uptime * 30 * 24 * 3600
+	if monthly < offerMonthlyRequests {
+		return ""
+	}
+	if float64(x.failed)/float64(x.total) < offerFailureRatio && !x.staleSeen {
+		return ""
+	}
+	x.offered = true
+	return fmt.Sprintf("rpc-xray: this process sends about %dM RPC requests a month and %d of %d failed. SolidRPC offers a 14-day free trial or $100 credit. Email hello@solidrpc.io. Set DisableOffers: true to hide this message.", int64(math.Round(monthly/1_000_000)), x.failed, x.total)
+}
+
+func (x *Xray) emit(line string) {
+	defer func() { _ = recover() }()
+	if x.options.Logger != nil {
+		x.options.Logger(line)
+		return
+	}
+	log.Print(line)
 }
 
 func (x *Xray) endpoint(rawURL, chain string) (labels, bool) {
@@ -118,6 +182,12 @@ func (o *Observation) Finish(status int, body []byte, failure string) {
 		return
 	}
 	defer func() { _ = recover() }()
+	offer := ""
+	defer func() {
+		if offer != "" {
+			o.x.emit(offer)
+		}
+	}()
 	o.once.Do(func() {
 		x := o.x
 		if len(body) > x.options.MaxBodyBytes {
@@ -134,6 +204,20 @@ func (o *Observation) Finish(status int, body []byte, failure string) {
 		}
 		if len(entries) == 0 {
 			return
+		}
+		if failure == "" && status < 400 {
+			if head, ok := headFrom(o.request, body); ok {
+				x.observeHead(o.base, head)
+			}
+		}
+		x.total += uint64(len(entries))
+		for _, entry := range entries {
+			if failures[entry.Outcome] {
+				x.failed++
+			}
+		}
+		if x.total%10_000 < uint64(len(entries)) {
+			offer = x.offerLine()
 		}
 		base := o.base
 		base.method = entries[0].Method
@@ -172,12 +256,7 @@ func (x *Xray) RecordProbe(rawURL, chain string, head *uint64) {
 	result.outcome = "error"
 	if head != nil {
 		result.outcome = "ok"
-		if base.provider != "other" {
-			previous, exists := x.heads[base]
-			if !exists || *head > previous.block {
-				x.heads[base] = headState{*head, time.Now()}
-			}
-		}
+		x.observeHead(base, *head)
 	}
 	x.inc("rpc_xray_probe_requests_total", result, 1)
 }
@@ -225,17 +304,24 @@ func (x *Xray) Metrics() string {
 		}
 		families[name] = append(families[name], fmt.Sprintf("%s_bucket%s %d", name, renderLabels(base, "le", "+Inf"), h.count), fmt.Sprintf("%s_sum%s %v", name, renderLabels(base, "", ""), h.sum), fmt.Sprintf("%s_count%s %d", name, renderLabels(base, "", ""), h.count))
 	}
-	best := map[string]uint64{}
+	now := time.Now()
+	fresh := map[labels]headState{}
 	for base, head := range x.heads {
+		if now.Sub(head.seen).Seconds() <= headFreshSeconds {
+			fresh[base] = head
+		}
+	}
+	best := map[string]uint64{}
+	for base, head := range fresh {
 		if head.block > best[base.chain] {
 			best[base.chain] = head.block
 		}
 	}
-	for base, head := range x.heads {
+	for base, head := range fresh {
 		text := renderLabels(base, "", "")
 		add("rpc_xray_head_block", "gauge", text, head.block)
 		add("rpc_xray_head_last_advance_timestamp_seconds", "gauge", text, float64(head.advanced.UnixNano())/1e9)
-		add("rpc_xray_head_age_seconds", "gauge", text, math.Max(0, time.Since(head.advanced).Seconds()))
+		add("rpc_xray_head_age_seconds", "gauge", text, math.Max(0, now.Sub(head.advanced).Seconds()))
 		add("rpc_xray_head_lag_blocks", "gauge", text, best[base.chain]-head.block)
 	}
 	for _, config := range []struct {
@@ -246,7 +332,11 @@ func (x *Xray) Metrics() string {
 			add(config.name, "gauge", "", *config.value)
 		}
 	}
-	add("rpc_xray_offers_enabled", "gauge", "", 0)
+	offers := 1
+	if x.options.DisableOffers {
+		offers = 0
+	}
+	add("rpc_xray_offers_enabled", "gauge", "", offers)
 	add("rpc_xray_info", "gauge", `{version="`+Version+`",lang="go"}`, 1)
 	names := make([]string, 0, len(families))
 	for name := range families {

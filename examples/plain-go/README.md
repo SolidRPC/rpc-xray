@@ -21,7 +21,7 @@ set +a
 ../../tmp/rpc-xray-go
 ```
 
-The app listens on `127.0.0.1:9464` by default. It makes no chain discovery or head probe calls. Polls do not overlap and requests time out after 4.5 seconds. There are no application retries. Metrics scrapes add zero RPC requests. Head gauges remain absent because separate probing is disabled.
+The app listens on `127.0.0.1:9464` by default. It makes no chain discovery or head probe calls. Polls do not overlap and requests time out after 4.5 seconds. There are no application retries. Metrics scrapes add zero RPC requests. Head gauges come from the app's own `eth_blockNumber` answers, so stale-head and lag incidents work with no extra calls.
 
 ```bash
 curl http://127.0.0.1:9464/

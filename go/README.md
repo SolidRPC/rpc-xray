@@ -41,9 +41,15 @@ Complete inspected bodies get JSON-RPC classification. Oversized, still-encoded,
 
 All metric names, labels, buckets, and outcomes follow the [shared specification](../spec/README.md). Unknown methods use `other`. Provider labels contain only host and non-default port. Paths, query strings, credentials, and upstream messages are never exported. A mutex protects concurrent requests and scrapes. Endpoint and series counts are bounded.
 
-The SDK is passive. It does not discover chain IDs, schedule probes, or print offers. Supply `Chain`, otherwise it exports `unknown`. `rpc_xray_offers_enabled` is `0`. Set `ValuePerRequest` or `RevenuePerHour` pointers in `Options` to export the optional USD gauges.
+The SDK adds no RPC calls. It does not discover chain IDs or schedule probes. Supply `Chain`, otherwise it exports `unknown`. Set `ValuePerRequest` or `RevenuePerHour` pointers in `Options` to export the optional USD gauges.
 
-If your app runs a separate head probe through an unwrapped client, call `telemetry.RecordProbe(url, chain, &head)` or `nil` on failure. Probe observations populate the four head gauges and the separate probe counter. With no probes, head gauges are absent. Metrics scrapes do not send RPC requests.
+Head freshness comes from traffic you already send. When a wrapped request includes `eth_blockNumber` and the answer is a successful hex block number, that block updates the head, head age, last-advance and lag gauges for that chain and provider. A batch entry counts too. No extra request is made. Head gauges are exported while observations stay fresh, up to 120 seconds after the last one, so an app that stops polling does not raise a false stale-head incident. Lag needs two or more providers for the same chain. `ethclient.BlockNumber` sends `eth_blockNumber`, so most go-ethereum apps get head metrics with no change.
+
+If your app never calls `eth_blockNumber`, run a separate head probe through an unwrapped client and call `telemetry.RecordProbe(url, chain, &head)`, or `nil` on failure. Probe results are also counted in `rpc_xray_probe_requests_total`. With no head observations, head gauges are absent. Metrics scrapes do not send RPC requests.
+
+## The SolidRPC offer
+
+`rpc_xray_offers_enabled` is `1` by default. When this process has run for a day, projects about 100M requests a month, and saw at least 1% failed requests or a stale head, it writes one line through the standard `log` package naming the 14-day free trial or $100 credit from SolidRPC and hello@solidrpc.io. It is written once per process. The dashboard and Slack offer use the same gauge. Set `Options.Logger` to send the line elsewhere, or `Options.DisableOffers` to turn the offer off everywhere. Nothing is sent to SolidRPC.
 
 For custom clients, `telemetry.Start(url, chain, requestBytes)` returns an optional observation with `Finish(status, responseBytes, failure)`. Supply an empty failure for HTTP responses or `timeout` / `network`. `Finish` is nil-safe and records at most once.
 

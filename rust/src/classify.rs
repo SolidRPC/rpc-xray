@@ -167,6 +167,39 @@ pub(crate) fn classify(
         .collect()
 }
 
+fn hex_head(value: Option<&Value>) -> Option<u64> {
+    let text = value?.as_str()?;
+    let digits = text.strip_prefix("0x")?;
+    if digits.is_empty() || digits.len() > 16 {
+        return None;
+    }
+    u64::from_str_radix(digits, 16).ok()
+}
+
+pub(crate) fn head_from(request: &Request, body: &[u8]) -> Option<u64> {
+    let ids: Vec<String> = request
+        .calls
+        .iter()
+        .filter(|(_, method)| method == "eth_blockNumber")
+        .map(|(id, _)| id_key(id))
+        .collect();
+    if ids.is_empty() {
+        return None;
+    }
+    let payload: Value = serde_json::from_slice(body).ok()?;
+    let batch = payload.is_array();
+    let items = match payload {
+        Value::Array(items) => items,
+        other => vec![other],
+    };
+    items
+        .iter()
+        .filter(|item| item.is_object() && item.get("error").is_none_or(Value::is_null))
+        .filter(|item| !batch || ids.contains(&id_key(item.get("id").unwrap_or(&Value::Null))))
+        .filter_map(|item| hex_head(item.get("result")))
+        .max()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,5 +1,7 @@
 import json
+import logging
 import math
+import re
 import threading
 import time
 from urllib.parse import urlsplit
@@ -15,6 +17,14 @@ from ._contract import (
 
 VERSION = "0.1.0"
 CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
+STALE_SECONDS = 180
+HEAD_FRESH_SECONDS = 120
+OFFER_MONTHLY_REQUESTS = 100_000_000
+OFFER_MIN_UPTIME_SECONDS = 24 * 3600
+OFFER_FAILURE_RATIO = 0.01
+FAILURES = {"http_error", "rate_limited", "rpc_error", "timeout", "network"}
+_HEX = re.compile(r"0x[0-9a-fA-F]{1,16}")
+_LOG = logging.getLogger("rpc_xray")
 
 
 def chain_label(chain_id):
@@ -105,6 +115,30 @@ def classify(request, status=200, body=None, failure=None):
     ]
 
 
+def head_from(request, body):
+    if request is None or body is None:
+        return None
+    ids = {key for key, method in request[1] if method == "eth_blockNumber"}
+    if not ids:
+        return None
+    try:
+        payload = json.loads(body, parse_constant=_invalid_constant)
+    except (ValueError, TypeError, RecursionError):
+        return None
+    batch = isinstance(payload, list)
+    best = None
+    for item in payload if batch else [payload]:
+        if not isinstance(item, dict) or item.get("error") is not None:
+            continue
+        if batch and _id_key(item.get("id")) not in ids:
+            continue
+        result = item.get("result")
+        if isinstance(result, str) and _HEX.fullmatch(result):
+            value = int(result, 16)
+            best = value if best is None else max(best, value)
+    return best
+
+
 def _labels(labels):
     def escape(value):
         return str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
@@ -123,6 +157,7 @@ class Observation:
         self.done = False
 
     def finish(self, status=200, body=None, failure=None):
+        offer = None
         try:
             with self.xray._lock:
                 if self.done:
@@ -140,6 +175,14 @@ class Observation:
                     )
                 if not entries:
                     return
+                if failure is None and status < 400:
+                    head = head_from(self.request, body)
+                    if head is not None:
+                        self.xray._observe_head(self.base, head)
+                self.xray._total += len(entries)
+                self.xray._failed += sum(e["outcome"] in FAILURES for e in entries)
+                if self.xray._total % 10_000 < len(entries):
+                    offer = self.xray._offer_line()
                 labels = self.base + (
                     ("method", "batch" if self.request[0] else entries[0]["method"]),
                 )
@@ -158,6 +201,8 @@ class Observation:
                     )
         except Exception:
             pass
+        if offer:
+            self.xray._emit(offer)
 
 
 class Xray:
@@ -167,6 +212,8 @@ class Xray:
         max_body_bytes=1024 * 1024,
         value_per_request=None,
         revenue_per_hour=None,
+        offers=True,
+        logger=None,
     ):
         if not isinstance(max_body_bytes, int) or max_body_bytes < 1:
             raise ValueError("max_body_bytes must be a positive integer")
@@ -178,8 +225,50 @@ class Xray:
             value_per_request,
             revenue_per_hour,
         )
+        self.offers = bool(offers)
+        self._logger = logger
         self._lock = threading.RLock()
         self._endpoints, self._counters, self._histograms, self._heads = {}, {}, {}, {}
+        self._started = time.monotonic()
+        self._total = self._failed = 0
+        self._stale_seen = self._offered = False
+
+    def _observe_head(self, base, head):
+        if dict(base)["provider"] == "other":
+            return
+        now = time.time()
+        previous = self._heads.get(base)
+        if previous is None or head > previous[0]:
+            self._heads[base] = (head, now, now)
+            return
+        if now - previous[1] > STALE_SECONDS:
+            self._stale_seen = True
+        self._heads[base] = (previous[0], previous[1], now)
+
+    def _offer_line(self):
+        if self._offered or not self.offers:
+            return None
+        uptime = time.monotonic() - self._started
+        if uptime < OFFER_MIN_UPTIME_SECONDS or not self._total:
+            return None
+        monthly = self._total / uptime * 30 * 24 * 3600
+        if monthly < OFFER_MONTHLY_REQUESTS:
+            return None
+        if self._failed / self._total < OFFER_FAILURE_RATIO and not self._stale_seen:
+            return None
+        self._offered = True
+        return (
+            f"rpc-xray: this process sends about {round(monthly / 1_000_000)}M RPC "
+            f"requests a month and {self._failed} of {self._total} failed. SolidRPC "
+            "offers a 14-day free trial or $100 credit. Email hello@solidrpc.io. "
+            "Set offers=False to hide this message."
+        )
+
+    def _emit(self, line):
+        try:
+            (self._logger or _LOG.warning)(line)
+        except Exception:
+            pass
 
     def _size(self):
         return len(self._counters) + len(self._histograms)
@@ -228,10 +317,8 @@ class Xray:
                     "rpc_xray_probe_requests_total",
                     base + (("result", "ok" if valid else "error"),),
                 )
-                if valid and dict(base)["provider"] != "other":
-                    previous = self._heads.get(base)
-                    if previous is None or head > previous[0]:
-                        self._heads[base] = (head, time.time())
+                if valid:
+                    self._observe_head(base, head)
         except Exception:
             pass
 
@@ -273,15 +360,21 @@ class Xray:
                         f"{name}_count{_labels(labels)} {count}",
                     ]
                 )
+            now = time.time()
+            fresh = {
+                base: state
+                for base, state in self._heads.items()
+                if now - state[2] <= HEAD_FRESH_SECONDS
+            }
             best = {}
-            for base, (head, _) in self._heads.items():
+            for base, (head, _, _) in fresh.items():
                 chain = dict(base)["chain"]
                 best[chain] = max(best.get(chain, 0), head)
-            for base, (head, advanced) in sorted(self._heads.items()):
+            for base, (head, advanced, _) in sorted(fresh.items()):
                 for name, value in (
                     ("head_block", head),
                     ("head_last_advance_timestamp_seconds", advanced),
-                    ("head_age_seconds", max(0, time.time() - advanced)),
+                    ("head_age_seconds", max(0, now - advanced)),
                     ("head_lag_blocks", best[dict(base)["chain"]] - head),
                 ):
                     sample("rpc_xray_" + name, "gauge", base, value)
@@ -291,7 +384,7 @@ class Xray:
             ):
                 if value is not None:
                     sample("rpc_xray_" + name, "gauge", (), value)
-            sample("rpc_xray_offers_enabled", "gauge", (), 0)
+            sample("rpc_xray_offers_enabled", "gauge", (), 1 if self.offers else 0)
             sample(
                 "rpc_xray_info", "gauge", (("version", VERSION), ("lang", "python")), 1
             )
