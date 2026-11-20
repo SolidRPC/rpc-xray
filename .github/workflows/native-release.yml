@@ -64,8 +64,9 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
         run: |
-          cargo publish --dry-run --locked --all-features --registry crates-io
+          cargo package --locked --all-features
           cmp "../dist/solidrpc-rpc-xray-$VERSION.crate" "target/package/solidrpc-rpc-xray-$VERSION.crate"
+          cargo publish --dry-run --locked --all-features --registry crates-io
       - uses: actions/upload-artifact@v4
         with:
           name: candidate-${{ inputs.sdk }}
