@@ -187,7 +187,6 @@ pub(crate) fn head_from(request: &Request, body: &[u8]) -> Option<u64> {
         return None;
     }
     let payload: Value = serde_json::from_slice(body).ok()?;
-    let batch = payload.is_array();
     let items = match payload {
         Value::Array(items) => items,
         other => vec![other],
@@ -195,7 +194,10 @@ pub(crate) fn head_from(request: &Request, body: &[u8]) -> Option<u64> {
     items
         .iter()
         .filter(|item| item.is_object() && item.get("error").is_none_or(Value::is_null))
-        .filter(|item| !batch || ids.contains(&id_key(item.get("id").unwrap_or(&Value::Null))))
+        .filter(|item| {
+            item.get("id")
+                .is_some_and(|id| !id.is_null() && ids.contains(&id_key(id)))
+        })
         .filter_map(|item| hex_head(item.get("result")))
         .max()
 }

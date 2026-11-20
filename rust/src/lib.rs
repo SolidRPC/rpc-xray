@@ -516,6 +516,15 @@ mod metric_tests {
             200,
             r#"[{"id":"b","result":"0x20"},{"id":"a","result":"0x99"}]"#,
         );
+        for bad in [r#"{"id":"a","result":"0xffff"}"#, r#"{"result":"0xffff"}"#] {
+            finish(
+                &xray,
+                "https://rpc.example",
+                r#"[{"id":"a","method":"eth_call"},{"id":"b","method":"eth_blockNumber"}]"#,
+                200,
+                bad,
+            );
+        }
         for body in [
             r#"{"id":1,"result":"0x1"}"#,
             r#"{"id":1,"result":"latest"}"#,

@@ -288,6 +288,9 @@ def test_passive_head_from_block_number_answers():
     xray.start("https://rpc.example", "ethereum", REQUEST).finish(200, OK)
     assert gauge(xray, "rpc_xray_head_block") == 16
     batch = b'[{"id":"a","method":"eth_call"},{"id":"b","method":"eth_blockNumber"}]'
+    for bad in (b'{"id":"a","result":"0xffff"}', b'{"result":"0xffff"}'):
+        xray.start("https://rpc.example", "ethereum", batch).finish(200, bad)
+        assert gauge(xray, "rpc_xray_head_block") == 16
     answer = b'[{"id":"b","result":"0x20"},{"id":"a","result":"0x99"}]'
     xray.start("https://rpc.example", "ethereum", batch).finish(200, answer)
     assert gauge(xray, "rpc_xray_head_block") == 32

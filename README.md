@@ -218,10 +218,10 @@ npm ci
 npm pack
 ```
 
-`npm pack` builds the package and creates `solidrpc-rpc-xray-0.1.1.tgz`, including its license. Install that tarball in a test app using its actual path:
+`npm pack` builds the package and creates `solidrpc-rpc-xray-0.1.2.tgz`, including its license. Install that tarball in a test app using its actual path:
 
 ```bash
-npm install --no-save --package-lock=false /absolute/path/to/rpc-xray/js/solidrpc-rpc-xray-0.1.1.tgz
+npm install --no-save --package-lock=false /absolute/path/to/rpc-xray/js/solidrpc-rpc-xray-0.1.2.tgz
 ```
 
 The application import stays `@solidrpc/rpc-xray`. The [plain Node example](examples/plain-node/README.md#test-before-publication) and CI exercise this packaged build without requiring a published release.

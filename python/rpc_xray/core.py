@@ -130,7 +130,7 @@ def head_from(request, body):
     for item in payload if batch else [payload]:
         if not isinstance(item, dict) or item.get("error") is not None:
             continue
-        if batch and _id_key(item.get("id")) not in ids:
+        if item.get("id") is None or _id_key(item["id"]) not in ids:
             continue
         result = item.get("result")
         if isinstance(result, str) and _HEX.fullmatch(result):

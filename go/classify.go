@@ -229,7 +229,7 @@ func headFrom(r *request, body []byte) (uint64, bool) {
 	var payload any
 	decoder := json.NewDecoder(strings.NewReader(string(body)))
 	decoder.UseNumber()
-	if decoder.Decode(&payload) != nil {
+	if !json.Valid(body) || decoder.Decode(&payload) != nil {
 		return 0, false
 	}
 	items, batch := payload.([]any)
@@ -243,7 +243,7 @@ func headFrom(r *request, body []byte) (uint64, bool) {
 		if !ok || object["error"] != nil {
 			continue
 		}
-		if batch && !ids[idKey(object["id"])] {
+		if object["id"] == nil || !ids[idKey(object["id"])] {
 			continue
 		}
 		if head, ok := hexHead(object["result"]); ok && (!found || head > best) {

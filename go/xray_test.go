@@ -225,7 +225,14 @@ func TestPassiveHeadFromBlockNumberAnswers(t *testing.T) {
 	if got := gaugeLine(x, "rpc_xray_head_block", "rpc.example"); got != "16" {
 		t.Fatal(got, x.Metrics())
 	}
-	x.Start("https://rpc.example", "ethereum", []byte(`[{"id":"a","method":"eth_call"},{"id":"b","method":"eth_blockNumber"}]`)).Finish(200, []byte(`[{"id":"b","result":"0x20"},{"id":"a","result":"0x99"}]`), "")
+	batch := []byte(`[{"id":"a","method":"eth_call"},{"id":"b","method":"eth_blockNumber"}]`)
+	for _, bad := range []string{`{"id":"a","result":"0xffff"}`, `{"result":"0xffff"}`, `{"id":"b","result":"0xffff"}junk`} {
+		x.Start("https://rpc.example", "ethereum", batch).Finish(200, []byte(bad), "")
+		if got := gaugeLine(x, "rpc_xray_head_block", "rpc.example"); got != "16" {
+			t.Fatal(got)
+		}
+	}
+	x.Start("https://rpc.example", "ethereum", batch).Finish(200, []byte(`[{"id":"b","result":"0x20"},{"id":"a","result":"0x99"}]`), "")
 	for _, body := range []string{`{"id":1,"result":"0x1"}`, `{"id":1,"result":"latest"}`, `{"id":1,"error":{"code":-32000,"message":"x"}}`} {
 		x.Start("https://rpc.example", "ethereum", []byte(`{"id":1,"method":"eth_blockNumber"}`)).Finish(200, []byte(body), "")
 	}

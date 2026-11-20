@@ -92,7 +92,7 @@ cd js
 npm ci
 npm pack
 cd ../examples/plain-node
-npm install --no-save --package-lock=false ../../js/solidrpc-rpc-xray-0.1.1.tgz
+npm install --no-save --package-lock=false ../../js/solidrpc-rpc-xray-0.1.2.tgz
 npm test
 ```
 

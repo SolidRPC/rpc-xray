@@ -72,7 +72,7 @@ Batches: each request entry takes the outcome of the response entry with the sam
 
 JavaScript polls each endpoint with `eth_blockNumber` every `probeIntervalSeconds` (default 15, `0` turns the probe off). Supply an explicit chain as well to disable its chain discovery calls.
 
-Python, Go, and Rust never schedule probes or discover chains. They read the head passively: when a wrapped exchange succeeds (no transport failure, HTTP status below 400, body inspected) and a call to `eth_blockNumber` is answered with a `result` that is a `0x`-prefixed hex string of 1 to 16 digits and no `error`, that block is a head observation. In a batch, only response entries whose `id` matches an `eth_blockNumber` request entry count, and the highest one is used. Passive observations are not counted in `rpc_xray_probe_requests_total`.
+Python, Go, and Rust never schedule probes or discover chains. They read the head passively: when a wrapped exchange succeeds (no transport failure, HTTP status below 400, body inspected) and a call to `eth_blockNumber` is answered with a `result` that is a `0x`-prefixed hex string of 1 to 16 digits and no `error`, that block is a head observation. Only results with a non-null ID matching an `eth_blockNumber` request count, even when a server returns a single object for a batch. The highest matching head is used. Passive observations are not counted in `rpc_xray_probe_requests_total`.
 
 Applications that never call `eth_blockNumber` can record results from their own separate, unwrapped head probes with `record_probe` / `RecordProbe`. A failed probe increments the `error` result and leaves the last known head intact. Probe calls are counted only in `rpc_xray_probe_requests_total`.
 

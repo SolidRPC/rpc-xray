@@ -25,10 +25,10 @@ See npm's [trusted publishing](https://docs.npmjs.com/trusted-publishers/) and [
 
 Merge the release workflow into `main`, then open **Actions → npm release → Run workflow**. Select `main`, enter the package version, and leave `publish` unchecked.
 
-The equivalent CLI command for version `0.1.1` is:
+The equivalent CLI command for version `0.1.2` is:
 
 ```bash
-gh workflow run release.yml --repo SolidRPC/rpc-xray --ref main -f version=0.1.1 -F publish=false
+gh workflow run release.yml --repo SolidRPC/rpc-xray --ref main -f version=0.1.2 -F publish=false
 ```
 
 The workflow checks metadata, formatting, types, unit tests and generated monitoring files. It validates the Prometheus rules, tests the packed tarball with the plain Node example and both ESM and CommonJS imports, and runs `npm publish --dry-run`. The `npm-package` artifact contains the tested tarball and its integrity manifest. A preview needs no npm publishing credential and does not generate blockchain RPC traffic.
