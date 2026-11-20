@@ -48,8 +48,8 @@
     "web3"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm,cjs --dts --target node20 --clean",
-    "check": "npm run format:check && npm run typecheck && npm test && npm run build",
+    "build": "tsup src/index.ts --format cjs --dts --target node20 --clean && node scripts/build-esm.mjs",
+    "check": "npm run format:check && npm run typecheck && npm test && npm run build && node --test test/package.test.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
