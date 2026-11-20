@@ -12,7 +12,7 @@ Node.js 20 or newer. No runtime dependencies.
 npm install @solidrpc/rpc-xray
 ```
 
-This is the standard installation path once the package is published. For pre-release testing, see the [development instructions](https://github.com/SolidRPC/rpc-xray#development-before-publishing). They build a local npm tarball without changing the application's package import.
+To test unreleased changes locally, see the [development instructions](https://github.com/SolidRPC/rpc-xray#development-and-release-testing). They build a local npm tarball without changing the application's package import.
 
 For a runnable app without a framework, use the [complete plain Node.js example](https://github.com/SolidRPC/rpc-xray/tree/main/examples/plain-node). It includes `/metrics`, a matching Prometheus config, a local mock test and graceful shutdown.
 

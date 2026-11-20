@@ -1,3 +1,4 @@
+import { CALLER_CODES, RATE_PATTERNS, CALLER_PATTERNS } from "./contract.js";
 import { methodLabel } from "./methods.js";
 
 export type Outcome =
@@ -12,37 +13,6 @@ export interface ParsedRequest {
   batch: boolean;
   calls: { id: unknown; method: string }[];
 }
-
-const CALLER_CODES = new Set([3, -32600, -32601, -32602, -32700]);
-
-const RATE_PATTERNS = [
-  "rate limit",
-  "too many requests",
-  "throttl",
-  "capacity exceeded",
-  "quota exceeded",
-  "exceeded the quota",
-];
-
-const CALLER_PATTERNS = [
-  "execution reverted",
-  "revert",
-  "nonce too low",
-  "nonce too high",
-  "already known",
-  "insufficient funds",
-  "underpriced",
-  "intrinsic gas too low",
-  "gas required exceeds",
-  "out of gas",
-  "exceeds block gas limit",
-  "max fee per gas less than block base fee",
-  "invalid opcode",
-  "invalid sender",
-  "invalid params",
-  "method not found",
-  "does not exist/is not available",
-];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -111,7 +81,13 @@ export function classifyResponse(
   } catch {
     return all(request, "rpc_error");
   }
-  if (!Array.isArray(parsed)) return all(request, outcomeOfResponseObject(parsed));
+  if (!Array.isArray(parsed)) {
+    const globalError = isRecord(parsed) && parsed.id == null && parsed.error != null;
+    return all(
+      request,
+      request.batch && !globalError ? "rpc_error" : outcomeOfResponseObject(parsed),
+    );
+  }
   const byId = new Map<string, Outcome>();
   for (const item of parsed) {
     if (isRecord(item)) byId.set(JSON.stringify(item.id ?? null), outcomeOfResponseObject(item));

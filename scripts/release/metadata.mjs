@@ -2,6 +2,20 @@ import assert from "node:assert/strict";
 import { appendFile, readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
+export function shouldDryRunPublish(status, event) {
+  assert.ok(
+    ["pull_request", "workflow_dispatch"].includes(event),
+    "Unsupported release event",
+  );
+  if (status === 404) return true;
+  if (status === 200 && event === "pull_request") return false;
+  if (status === 200)
+    throw new Error(
+      "This version is already published. Bump the package version before releasing again.",
+    );
+  throw new Error(`Registry availability check failed: HTTP ${status}`);
+}
+
 export function validateRelease(pkg, context) {
   assert.equal(pkg.name, "@solidrpc/rpc-xray", "Unexpected package name");
   assert.match(

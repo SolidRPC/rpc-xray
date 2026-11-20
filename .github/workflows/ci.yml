@@ -40,6 +40,153 @@ jobs:
         run: |
           npm install --no-save --package-lock=false "../../js/$TARBALL"
           npm test
+      - name: Shared metric contract
+        working-directory: .
+        run: |
+          node scripts/js-metrics-fixture.mjs /tmp/js-metrics.txt
+          python3 scripts/check-metrics.py /tmp/js-metrics.txt
+
+  python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.10', '3.13']
+        httpx: ['0.27.0', 'latest']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install './python[test]'
+      - if: matrix.httpx != 'latest'
+        run: python -m pip install 'httpx==${{ matrix.httpx }}'
+      - name: Test SDK and shared metric contract
+        env:
+          RPC_XRAY_METRICS_FIXTURE: /tmp/python-metrics.txt
+        run: |
+          python -m pytest python/tests -q
+          python scripts/check-metrics.py /tmp/python-metrics.txt
+      - name: Build and test the installed wheel
+        run: |
+          python -m build python
+          python -m pip install --force-reinstall --no-deps python/dist/*.whl
+          python -m pytest python/tests/test_httpx_compression.py -q
+          python scripts/test-example.py python
+          python scripts/test-example.py python --gzip
+      - uses: actions/upload-artifact@v4
+        if: matrix.python == '3.13' && matrix.httpx == 'latest'
+        with:
+          name: python-package
+          path: python/dist/*
+
+  go:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: ['1.23.x', 'stable']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: false
+      - name: Test SDK and formatting
+        working-directory: go
+        env:
+          RPC_XRAY_METRICS_FIXTURE: /tmp/go-metrics.txt
+        run: |
+          test -z "$(gofmt -l .)"
+          go test -race ./...
+          go vet ./...
+      - name: Build and test the complete example
+        run: |
+          python3 scripts/check-metrics.py /tmp/go-metrics.txt
+          mkdir -p tmp
+          cd examples/plain-go
+          go build -o ../../tmp/rpc-xray-go .
+          cd ../..
+          python3 scripts/test-example.py go
+
+  go-ethereum:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - name: Test and build the go-ethereum integration
+        working-directory: examples/go-ethereum
+        run: |
+          test -z "$(gofmt -l .)"
+          go test -race ./...
+          go vet ./...
+          mkdir -p ../../tmp
+          go build -o ../../tmp/rpc-xray-go-ethereum .
+      - name: Test the running go-ethereum app
+        run: python3 scripts/test-example.py go-ethereum
+
+  rust-minimum:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.94.1
+      - name: Check supported features on the minimum Rust version
+        working-directory: rust
+        run: cargo check --locked --all-features
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            rust
+            examples/plain-rust
+            examples/alloy
+      - name: Test SDK and package
+        working-directory: rust
+        env:
+          RPC_XRAY_METRICS_FIXTURE: /tmp/rust-metrics.txt
+        run: |
+          cargo fmt --check
+          cargo test --locked --all-features
+          cargo test --locked --no-default-features
+          cargo test --locked --no-default-features --features alloy
+          cargo clippy --locked --all-targets --all-features -- -D warnings
+          cargo package --locked --all-features
+      - name: Build and test the complete example
+        run: |
+          python3 scripts/check-metrics.py /tmp/rust-metrics.txt
+          cargo fmt --manifest-path examples/plain-rust/Cargo.toml --check
+          cargo build --locked --manifest-path examples/plain-rust/Cargo.toml
+          python3 scripts/test-example.py rust
+      - name: Build and test the Alloy integration
+        run: |
+          cargo fmt --manifest-path examples/alloy/Cargo.toml --check
+          cargo build --locked --manifest-path examples/alloy/Cargo.toml
+          python3 scripts/test-example.py alloy
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rust-package
+          path: rust/target/package/*.crate
+
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 scripts/generate-contract.py
+          git diff --exit-code
+          cmp LICENSE python/LICENSE
+          cmp LICENSE go/LICENSE
+          cmp LICENSE rust/LICENSE
 
   alerts:
     runs-on: ubuntu-latest
@@ -65,3 +212,10 @@ jobs:
           docker compose -f stack/docker-compose.yml config --quiet
           RPC_XRAY_TARGETS=./targets.demo.yml docker compose -f stack/docker-compose.yml --profile demo config --quiet
           docker compose -f examples/plain-node/compose.yml config --quiet
+          for example in plain-python plain-go plain-rust go-ethereum alloy; do
+            docker compose -f "examples/$example/compose.yml" config --quiet
+            docker run --rm --entrypoint promtool \
+              -v "$PWD/examples/$example/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+              -v "$PWD/alerts/rpc-xray.rules.yml:/etc/prometheus/rpc-xray.rules.yml:ro" \
+              prom/prometheus:v3.0.1 check config /etc/prometheus/prometheus.yml
+          done

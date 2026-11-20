@@ -8,7 +8,7 @@ import {
 } from "./classify.js";
 import { Registry, type GaugeSample } from "./registry.js";
 
-export const VERSION = "0.1.1";
+export const VERSION = "0.1.2";
 
 const MAX_ENDPOINTS = 32;
 const MAX_PENDING = 2000;
@@ -288,9 +288,18 @@ export class Xray {
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params: [] }),
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
-    const payload = (await response.json()) as { result?: unknown };
-    if (typeof payload.result !== "string") throw new Error("no result");
-    return Number.parseInt(payload.result, 16);
+    if (!response.ok) throw new Error("probe failed");
+    const payload = (await response.json()) as { id?: unknown; result?: unknown; error?: unknown };
+    if (
+      payload.id !== 1 ||
+      payload.error != null ||
+      typeof payload.result !== "string" ||
+      !/^0x[0-9a-f]{1,16}$/i.test(payload.result)
+    )
+      throw new Error("invalid probe response");
+    const result = Number(payload.result);
+    if (!Number.isSafeInteger(result)) throw new Error("probe result exceeds safe integer range");
+    return result;
   }
 
   private async tick(endpoint: Endpoint): Promise<void> {
@@ -326,9 +335,9 @@ export class Xray {
       const head = (await this.call(endpoint, "eth_blockNumber")) as number;
       if (!Number.isFinite(head)) throw new Error("bad head");
       if (endpoint.head === undefined || head > endpoint.head) {
-        endpoint.head = head;
         endpoint.lastAdvance = Date.now();
       }
+      endpoint.head = head;
       this.registry.inc("rpc_xray_probe_requests_total", "Head probe calls by result.", {
         ...labels,
         result: "ok",

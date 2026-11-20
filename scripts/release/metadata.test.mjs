@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { validateRelease } from "./metadata.mjs";
+import { shouldDryRunPublish, validateRelease } from "./metadata.mjs";
 
 const pkg = JSON.parse(
   await readFile(new URL("../../js/package.json", import.meta.url), "utf8"),
@@ -55,4 +55,25 @@ test("rejects prereleases, private packages and mismatched release metadata", ()
       validateRelease({ ...pkg, ...patch }, { event: "pull_request" }),
     );
   }
+});
+
+test("PRs can validate existing versions while manual releases require a new version", () => {
+  assert.equal(shouldDryRunPublish(200, "pull_request"), false);
+  assert.equal(shouldDryRunPublish(404, "pull_request"), true);
+  assert.equal(shouldDryRunPublish(404, "workflow_dispatch"), true);
+  assert.throws(
+    () => shouldDryRunPublish(200, "workflow_dispatch"),
+    /already published/,
+  );
+  for (const status of [401, 403, 429, 500, 503]) {
+    assert.throws(
+      () => shouldDryRunPublish(status, "pull_request"),
+      /availability check failed/,
+    );
+    assert.throws(
+      () => shouldDryRunPublish(status, "workflow_dispatch"),
+      /availability check failed/,
+    );
+  }
+  assert.throws(() => shouldDryRunPublish(404, "push"), /Unsupported/);
 });

@@ -16,7 +16,7 @@ Node.js 20 or newer. The package has no runtime dependencies.
 npm install @solidrpc/rpc-xray
 ```
 
-This is the standard installation path once the package is published. For testing before the first npm release, use the [development instructions](#development-before-publishing).
+The npm package is published. For testing unreleased changes, use the [development instructions](#development-and-release-testing).
 
 For an existing viem app:
 
@@ -34,7 +34,22 @@ await serveMetrics({ host: "127.0.0.1", port: 9464 });
 
 Here `url` is your existing endpoint. The explicit chain label and disabled probes keep instrumentation from adding RPC calls. Omit these options to enable chain detection and the default head probes. See [request overhead](#what-it-does-to-your-requests) before choosing.
 
-Start with the [complete plain Node.js example](examples/plain-node/README.md) for a runnable app, `/metrics`, shutdown handling and matching Prometheus configuration. [Other JavaScript integrations](js/README.md) cover ethers and existing HTTP servers. Go and Rust packages are planned and are not available yet.
+Start with the [complete plain Node.js example](examples/plain-node/README.md) for a runnable app, `/metrics`, shutdown handling, and matching Prometheus configuration. [Other JavaScript integrations](js/README.md) cover ethers and existing HTTP servers.
+
+## Language SDKs
+
+All four SDKs use the same metric names, labels, histogram buckets, and error classifications. They share the dashboards and alert rules.
+
+| Language | Supported integration | Package | Complete example |
+|---|---|---|---|
+| [JavaScript / TypeScript](js/README.md) | fetch, viem, ethers | `@solidrpc/rpc-xray` on npm | [Node.js](examples/plain-node/README.md) |
+| [Python](python/README.md) | HTTPX sync and async, requests, web3.py HTTPProvider | `solidrpc-rpc-xray` on PyPI, not published yet | [Python](examples/plain-python/README.md) |
+| [Go](go/README.md) | `net/http`, `go-ethereum` | `github.com/SolidRPC/rpc-xray/go`, not tagged yet | [HTTP](examples/plain-go/README.md), [go-ethereum](examples/go-ethereum/README.md) |
+| [Rust](rust/README.md) | reqwest 0.13, Alloy 2.5 | `solidrpc-rpc-xray` on crates.io, not published yet | [reqwest](examples/plain-rust/README.md), [Alloy](examples/alloy/README.md) |
+
+Each SDK README leads with its intended package install command and includes local package instructions for unreleased versions. Every example has `/metrics`, shutdown handling, and a matching Prometheus config. Run one example at a time on the default port 9464, or assign separate ports and scrape targets.
+
+Python, Go, and Rust add no RPC calls of their own. They read the chain head from the `eth_blockNumber` answers your application already receives, so a stale or lagging provider shows up as soon as your app polls the head. Supply a chain label explicitly. If your app never calls `eth_blockNumber`, record a separate probe with `record_probe` or `RecordProbe`. JavaScript detects chains and probes heads itself, described below.
 
 ## Add it with a coding agent
 
@@ -43,26 +58,34 @@ Paste this prompt into your coding agent, in your project:
 ```text
 Integrate RPC X-Ray using https://github.com/SolidRPC/rpc-xray.
 
-1. Read the root and JavaScript READMEs. Find the existing HTTP JSON-RPC
-   clients. JavaScript is implemented. Report unsupported languages.
-2. Install @solidrpc/rpc-xray with the existing package manager. If the
+1. Read the root README and the README for the application's language.
+   Find the existing HTTP JSON-RPC clients and a supported adapter.
+2. Install the language package with the existing package manager. If the
    requested version is not published yet, report that release prerequisite.
-   The documented local tarball is a fallback for pre-release testing.
-3. Wrap the existing HTTP layer without changing URLs, headers, retries,
-   timeouts or application call sites. Keep credentials out of code and logs.
-4. Respect the application's request budget. To add zero RPC calls, set
+   The documented local package is a fallback for pre-release testing.
+3. Use the supported HTTP adapter without changing URLs, headers, retries,
+   or timeouts. Explain any required call-site changes, including Rust's
+   explicit reqwest response wrapper. Keep credentials out of code and logs.
+4. Respect the application's request budget. In JavaScript, to add zero RPC calls, set
    probeIntervalSeconds: 0 AND supply the correct chain for every endpoint.
    Explain that head freshness and lag are then unmeasured. Otherwise document
    the eth_chainId detection calls and eth_blockNumber probe overhead.
-5. Expose GET /metrics once per process on the existing HTTP server, or use
-   serveMetrics on port 9464. Use the same registry for wrapping and exporting.
-   An Xray instance exports with instance.metrics(), not the shared handler.
+   Python, Go, and Rust add no RPC calls and require explicit chain labels.
+   They measure head freshness from the app's own eth_blockNumber answers.
+5. Expose GET /metrics once per process using the same registry that wraps
+   the client. In JavaScript, use serveMetrics for the shared registry or
+   export your Xray instance's metrics(). Python and Rust export
+   telemetry.metrics() through the application's HTTP server. Go exposes
+   telemetry.Handler(). Follow the language's complete server example.
 6. Set the Prometheus host, port and metrics_path to the actual endpoint.
    For Docker, use host.docker.internal to reach the host, not localhost.
    Verify the target is UP and metrics advance after real application calls.
-7. Run type checks and tests. Use local mock RPCs for integration tests.
-   Check healthy traffic with no error series, missing head measurements,
-   and the no-incident dashboard state. Do not turn missing data into health.
+7. Run type checks and tests through the actual application client. Use
+   local mock RPCs for failures, including compressed JSON-RPC errors,
+   client timeouts, HTTP 429/500 with JSON-RPC bodies, and mixed batches.
+   Check healthy traffic, missing head measurements, and no-incident
+   dashboard states. Do not turn missing data into health. Verify that
+   scraping metrics adds zero RPC calls and stop test apps afterward.
 8. Report changed files, metrics URL, added RPC overhead, how to stop any
    example process, and clients that could not be wrapped.
 ```
@@ -124,7 +147,7 @@ An incident is something a person would have been paged for. Defaults, per chain
 - Reverts, invalid parameters and rejected transactions are your own results. They are counted as `caller_error` and never open an incident.
 - A null receipt, an empty log list and a zero balance are valid answers. They count as `ok`.
 - Error-rate incidents need at least a little traffic, so one failed call on a quiet endpoint does not page anyone.
-- Lag needs two or more endpoints for the same chain. With one endpoint, staleness is still detected.
+- With one endpoint, lag is zero and head age measures staleness. With two or more endpoints on the same chain, lag shows which one is behind.
 
 ## What waiting costs
 
@@ -140,17 +163,19 @@ The targets on the dashboard are editable at the top: success rate and p95 laten
 
 ## What it does to your requests
 
-Nothing. These rules are tested:
+The JavaScript fetch wrapper keeps its original pass-through behavior:
 
 - The wrapped client returns exactly what the underlying client returns: the same promise, the same response, the same error.
 - Any failure inside rpc-xray is swallowed and never reaches your code.
 - Recording happens after your code has the response. Nothing is awaited on the request path.
 - URLs, headers, bodies, retries and timeouts are never changed.
 - Response bodies are read on a copy and only up to 1 MiB. Larger answers are classified by HTTP status.
-- API keys never reach metrics or logs. The provider label is the host name only.
+- API keys never reach metrics or logs. The provider label contains only the host and any non-default port.
 - rpc-xray makes no network calls except to the endpoints you already use. Nothing is sent to SolidRPC.
 
-By default, RPC X-Ray detects each endpoint's chain with `eth_chainId` (up to three attempts) and probes `eth_blockNumber` immediately after discovery, then every 15 seconds, about 173,000 probe requests per 30-day month per endpoint. Change the probe interval with `probeIntervalSeconds`.
+Python and Go wrap HTTP transports. They return the underlying response while observing bounded copies as your code reads its body. Rust provides an explicit reqwest response wrapper and an Alloy HTTP transport that observes the original status before decoding packets. These adapters do not add body reads, retries, or deadline changes. Read each SDK's body-consumption notes before using streaming clients. Metrics are available after consumption or closure. The shared [specification](spec/README.md) describes these language boundaries.
+
+By default, the JavaScript SDK detects each endpoint's chain with `eth_chainId` (up to three attempts) and probes `eth_blockNumber` immediately after discovery, then every 15 seconds, about 173,000 probe requests per 30-day month per endpoint. Change the probe interval with `probeIntervalSeconds`.
 
 For **zero additional RPC calls**, set `probeIntervalSeconds: 0` and supply an explicit `chain` to every wrapper. Disabling probes alone does not disable chain detection. Request counters and latency remain available. Head age and lag are unmeasured, and the dashboard must not be read as reporting zero lag. Scraping `/metrics` itself never triggers RPC calls.
 
@@ -158,11 +183,11 @@ For **zero additional RPC calls**, set `probeIntervalSeconds: 0` and supply an e
 
 rpc-xray is built by [SolidRPC](https://solidrpc.io). If you send about 100M requests a month and rpc-xray recorded incidents in the last 7 days, the dashboard, one Slack message and one log line will tell you that SolidRPC offers a 14-day free trial or $100 credit. To take it, email hello@solidrpc.io.
 
-Nothing is sent to us. Set `offers: false` to turn the message off.
+The offer is on by default in all four SDKs and checked inside your process. Nothing is sent to us. To turn it off, set `offers: false` in JavaScript and Rust, `offers=False` in Python, or `DisableOffers: true` in Go.
 
 ## Configuration
 
-Everything is optional.
+The following options apply to JavaScript. See the language SDK READMEs for Python, Go, and Rust options.
 
 | Option | Default | Meaning |
 |---|---|---|
@@ -178,6 +203,10 @@ Everything is optional.
 
 Maintainers can prepare and publish releases with the [manual npm release workflow](RELEASING.md). Its default mode validates and packages without publishing.
 
+Python, Go, and Rust are versioned independently. Their CI jobs validate packages and examples but do not publish or create release tags. Release preparation for these languages is documented in [RELEASING.md](RELEASING.md#python-go-and-rust).
+
+The allowlists, buckets, and error patterns live in `spec/contract.json`. After changing it, run `python3 scripts/generate-contract.py`. All four languages run `spec/vectors.json` in CI. Generated copies are checked for drift.
+
 These steps are for contributors and pre-release testing. Application integrations use the npm package and import `@solidrpc/rpc-xray`.
 
 To test changes before a release, build a local package from a checkout:
@@ -189,10 +218,10 @@ npm ci
 npm pack
 ```
 
-`npm pack` builds the package and creates `solidrpc-rpc-xray-0.1.1.tgz`, including its license. Install that tarball in a test app using its actual path:
+`npm pack` builds the package and creates `solidrpc-rpc-xray-0.1.2.tgz`, including its license. Install that tarball in a test app using its actual path:
 
 ```bash
-npm install --no-save --package-lock=false /absolute/path/to/rpc-xray/js/solidrpc-rpc-xray-0.1.1.tgz
+npm install --no-save --package-lock=false /absolute/path/to/rpc-xray/js/solidrpc-rpc-xray-0.1.2.tgz
 ```
 
 The application import stays `@solidrpc/rpc-xray`. The [plain Node example](examples/plain-node/README.md#test-before-publication) and CI exercise this packaged build without requiring a published release.

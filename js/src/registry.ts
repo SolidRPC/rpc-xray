@@ -1,4 +1,5 @@
-export const BUCKETS = [0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10];
+import { BUCKETS } from "./contract.js";
+export { BUCKETS } from "./contract.js";
 
 const MAX_SERIES = 5000;
 
