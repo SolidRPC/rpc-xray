@@ -34,7 +34,7 @@ client = httpx.Client(transport=transport, timeout=4.5)
 
 Keep your existing client configuration, request URLs, headers, retry policy, and timeouts. For async clients use `AsyncTransport` with your `httpx.AsyncHTTPTransport` and pass it to `httpx.AsyncClient`. Close clients normally, including `await client.aclose()` for async clients.
 
-Expose `telemetry.metrics()` from the same instance at `GET /metrics` with `Content-Type: text/plain; version=0.0.4; charset=utf-8`. The [complete example](../examples/plain-python/README.md) includes a server, polling, shutdown, and Prometheus configuration.
+Expose `telemetry.metrics()` from the same instance at `GET /metrics` with `Content-Type: text/plain; version=0.0.4; charset=utf-8`. The [complete example](https://github.com/SolidRPC/rpc-xray/blob/main/examples/plain-python/README.md) includes a server, polling, shutdown, and Prometheus configuration.
 
 The adapters observe buffered POST requests. Streaming request bodies are skipped without reading them. Response bytes are copied as the application consumes the body, up to 1 MiB by default. Complete inspected bodies receive JSON-RPC classification. Oversized or prematurely closed responses use HTTP status only. The adapter never reads ahead, retries, or starts RPC calls. Metrics appear when the body is consumed or closed, so close streamed responses even when you do not read them.
 
@@ -72,11 +72,11 @@ For other clients, `telemetry.start(url, chain, request_bytes)` returns an optio
 
 ## Metrics and optional probes
 
-The [shared specification](../spec/README.md) defines all names, labels, histogram buckets, and error classifications. A batch counts each RPC call and one HTTP duration. Provider labels contain only the host and any non-default port, never credentials, paths, or query strings. Custom method names fold into `other`. Endpoints and metric series are bounded.
+The [shared specification](https://github.com/SolidRPC/rpc-xray/blob/main/spec/README.md) defines all names, labels, histogram buckets, and error classifications. A batch counts each RPC call and one HTTP duration. Provider labels contain only the host and any non-default port, never credentials, paths, or query strings. Custom method names fold into `other`. Endpoints and metric series are bounded.
 
 The SDK adds no RPC calls. It does not detect chains or schedule probes. Supply `chain` explicitly or get `unknown`. Optional `value_per_request` and `revenue_per_hour` constructor values enable the corresponding USD gauges.
 
-Head freshness comes from traffic you already send. When a wrapped request includes `eth_blockNumber` and the answer is a successful hex block number, that block updates the head, head age, last-advance and lag gauges for that chain and provider. A batch entry counts too. No extra request is made. Head gauges are exported while observations stay fresh, up to 120 seconds after the last one, so an app that stops polling does not raise a false stale-head incident. Lag needs two or more providers for the same chain.
+Head freshness comes from traffic you already send. When a wrapped request includes `eth_blockNumber` and the answer is a successful hex block number, that block updates the head, head age, last-advance and lag gauges for that chain and provider. A batch entry counts too. No extra request is made. Head gauges are exported while observations stay fresh, up to 120 seconds after the last one, so an app that stops polling does not raise a false stale-head incident. With one observed provider, lag is zero. A second fresh provider on the same chain makes comparison possible.
 
 If your application never calls `eth_blockNumber`, run a separate head probe through an unwrapped client and record it with `telemetry.record_probe(url, chain, head)`, or `head=None` for failure. Probe results are also counted in `rpc_xray_probe_requests_total`. Without any head observations those gauges are absent, not zero. Scraping metrics never sends a request.
 

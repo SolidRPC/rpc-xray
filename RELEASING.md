@@ -54,6 +54,14 @@ These SDKs start at their own `0.1.0` and are not published by the npm workflow.
 | Go | `go/xray.go` | Go module from a source tag | `go/v0.1.0` for the `go/` subdirectory |
 | Rust | `rust/Cargo.toml` | `.crate` archive | `solidrpc-rpc-xray` on crates.io |
 
-Before a first release, confirm ownership and availability of the registry name, configure its publishing credentials or trusted publisher, and add a separate manually triggered release workflow. Each workflow should validate and package without publishing by default, then publish only the tested artifact with explicit authorization. Go needs a subdirectory-prefixed Git tag after its checks pass. Do not reuse an npm tag for the Go module.
+After CI passes on the merged commit, run **Native SDK release** on `main`. Choose one SDK, enter its exact version, and leave `publish` unchecked to prepare a candidate. The workflow uses the Python and Rust archives from the successful push CI run on that SHA. For Go it prepares a source archive for inspection. It reports SHA-256 checksums and uploads the candidate. A Go module release uses the Git tag.
+
+```sh
+gh workflow run native-release.yml --ref main -f sdk=python -f version=0.1.0 -F publish=false
+gh workflow run native-release.yml --ref main -f sdk=go -f version=0.1.0 -F publish=false
+gh workflow run native-release.yml --ref main -f sdk=rust -f version=0.1.0 -F publish=false
+```
+
+For the first Python publication, configure a [PyPI pending trusted publisher](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/) for project `solidrpc-rpc-xray`, repository `SolidRPC/rpc-xray`, workflow `native-release.yml`, and environment `pypi`. For Rust, configure a crates.io token authorized to publish the new crate as the `CARGO_REGISTRY_TOKEN` secret in the `crates-io` GitHub environment. For Go, the `go-release` job needs permission to create `go/v0.1.0` in the repository. Choose the publish checkbox only when releasing the selected SDK. Recheck that the SHA shown in the release run is the intended revision.
 
 Update the relevant package version, lockfile, SDK docs, and examples together. Keep the published package version independent from the shared contract version. Any change to metric meaning, labels, or error classification requires a coordinated contract review and tests across every SDK before release.

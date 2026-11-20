@@ -198,7 +198,7 @@ fn probes_metrics_bounds_and_shared_clones() {
     xray.record_probe("https://rpc.example", "ethereum", None);
     assert!(xray
         .metrics()
-        .contains("rpc_xray_head_lag_blocks{chain=\"ethereum\",provider=\"rpc.example\"} 4"));
+        .contains("rpc_xray_head_lag_blocks{chain=\"ethereum\",provider=\"rpc.example\"} 10"));
     for i in 0..40 {
         xray.start(
             &format!("https://rpc{i}.example"),

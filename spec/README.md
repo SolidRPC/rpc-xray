@@ -35,7 +35,7 @@ Classification order for a JSON-RPC error object `{code, message}`:
 
 HTTP status takes precedence over JSON-RPC content. HTTP 429 is `rate_limited` even when its body contains a caller error. Other HTTP 4xx and 5xx responses are `http_error` even when the body is valid JSON-RPC. The Alloy HTTP transport observes status before Alloy's packet decoding can discard it.
 
-Batches: each request entry takes the outcome of the response entry with the same `id`. An entry with no matching response is `rpc_error`. If the response to a batch is a single object, every entry takes its outcome. Request counters count logical JSON-RPC items, while the duration histogram counts HTTP exchanges. One HTTP batch containing three calls adds three request observations and one duration observation.
+Batches: each request entry takes the outcome of the response entry with the same `id`. An entry with no matching response is `rpc_error`. A single error object with a null or missing ID rejects the whole batch, so each entry takes that error outcome. Any other singleton response to a batch is malformed and every entry receives `rpc_error`. Request counters count logical JSON-RPC items, while the duration histogram counts HTTP exchanges. One HTTP batch containing three calls adds three request observations and one duration observation.
 
 ## Labels
 
@@ -76,7 +76,7 @@ Python, Go, and Rust never schedule probes or discover chains. They read the hea
 
 Applications that never call `eth_blockNumber` can record results from their own separate, unwrapped head probes with `record_probe` / `RecordProbe`. A failed probe increments the `error` result and leaves the last known head intact. Probe calls are counted only in `rpc_xray_probe_requests_total`.
 
-For both sources, a head higher than the previous head updates the last-advance timestamp. Every head observation refreshes a last-seen time. Native SDKs export the four head gauges only for endpoints observed within the last 120 seconds, and compute lag among those endpoints only. This keeps an application that stops polling from raising a false stale-head incident, while an application that keeps polling a frozen provider still sees the head age grow. Without recent observations, head gauges are absent. Native SDKs aggregate head observations by chain and provider host, so use distinct hosts if individual routes need independent head measurements.
+The head gauge follows the latest observation, including a lower height after a rollback. Only an increase from the immediately previous observation updates the last-advance timestamp after initialization. Every head observation refreshes a last-seen time. Native SDKs export the four head gauges only for endpoints observed within the last 120 seconds, and compute lag among those endpoints only. This keeps an application that stops polling from raising a false stale-head incident, while an application that keeps polling a frozen provider still sees the head age grow. Without recent observations, head gauges are absent. Native SDKs aggregate head observations by chain and provider host, so use distinct hosts if individual routes need independent head measurements.
 
 ## Offer
 

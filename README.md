@@ -147,7 +147,7 @@ An incident is something a person would have been paged for. Defaults, per chain
 - Reverts, invalid parameters and rejected transactions are your own results. They are counted as `caller_error` and never open an incident.
 - A null receipt, an empty log list and a zero balance are valid answers. They count as `ok`.
 - Error-rate incidents need at least a little traffic, so one failed call on a quiet endpoint does not page anyone.
-- Lag needs two or more endpoints for the same chain. With one endpoint, staleness is still detected.
+- With one endpoint, lag is zero and head age measures staleness. With two or more endpoints on the same chain, lag shows which one is behind.
 
 ## What waiting costs
 

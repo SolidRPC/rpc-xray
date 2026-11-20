@@ -10,7 +10,7 @@ The module path is `github.com/SolidRPC/rpc-xray/go`. After the first Go release
 go get github.com/SolidRPC/rpc-xray/go@v0.1.0
 ```
 
-This SDK is not released yet. For development, add a local `replace` directive pointing to this directory, as the [complete example](../examples/plain-go/go.mod) does. Releases from this subdirectory require tags such as `go/v0.1.0`.
+This SDK is not released yet. For development, add a local `replace` directive pointing to this directory, as the [complete example](https://github.com/SolidRPC/rpc-xray/blob/main/examples/plain-go/go.mod) does. Releases from this subdirectory require tags such as `go/v0.1.0`.
 
 ## Integrate
 
@@ -29,7 +29,7 @@ mux.Handle("GET /metrics", telemetry.Handler())
 
 Import `rpcxray "github.com/SolidRPC/rpc-xray/go"`, `net/http`, and `time`. Wrap your existing transport and preserve your client settings. For `go-ethereum`, pass this HTTP client to `rpc.DialOptions(ctx, url, rpc.WithHTTPClient(client))`, then construct `ethclient.NewClient(rpcClient)`. JSON-RPC calls made by that client flow through the wrapper.
 
-The [complete go-ethereum example](../examples/go-ethereum/README.md) includes a runnable `ethclient` app, `/metrics`, graceful shutdown, local integration tests, and matching Prometheus configuration. It uses a separate module, so the SDK itself keeps its standard-library-only dependency footprint.
+The [complete go-ethereum example](https://github.com/SolidRPC/rpc-xray/blob/main/examples/go-ethereum/README.md) includes a runnable `ethclient` app, `/metrics`, graceful shutdown, local integration tests, and matching Prometheus configuration. It uses a separate module, so the SDK itself keeps its standard-library-only dependency footprint.
 
 The wrapper only inspects POST bodies that provide `Request.GetBody`. `http.NewRequest` supplies this for `bytes.Reader`, `bytes.Buffer`, and `strings.Reader`. Non-replayable streaming requests are skipped without consuming them. Responses retain their status, headers, and body bytes. The body wrapper copies at most 1 MiB as the caller reads, with no read-ahead or extra network calls. Always close response bodies.
 
@@ -39,11 +39,11 @@ Complete inspected bodies get JSON-RPC classification. Oversized, still-encoded,
 
 ## Metrics and optional probes
 
-All metric names, labels, buckets, and outcomes follow the [shared specification](../spec/README.md). Unknown methods use `other`. Provider labels contain only host and non-default port. Paths, query strings, credentials, and upstream messages are never exported. A mutex protects concurrent requests and scrapes. Endpoint and series counts are bounded.
+All metric names, labels, buckets, and outcomes follow the [shared specification](https://github.com/SolidRPC/rpc-xray/blob/main/spec/README.md). Unknown methods use `other`. Provider labels contain only host and non-default port. Paths, query strings, credentials, and upstream messages are never exported. A mutex protects concurrent requests and scrapes. Endpoint and series counts are bounded.
 
 The SDK adds no RPC calls. It does not discover chain IDs or schedule probes. Supply `Chain`, otherwise it exports `unknown`. Set `ValuePerRequest` or `RevenuePerHour` pointers in `Options` to export the optional USD gauges.
 
-Head freshness comes from traffic you already send. When a wrapped request includes `eth_blockNumber` and the answer is a successful hex block number, that block updates the head, head age, last-advance and lag gauges for that chain and provider. A batch entry counts too. No extra request is made. Head gauges are exported while observations stay fresh, up to 120 seconds after the last one, so an app that stops polling does not raise a false stale-head incident. Lag needs two or more providers for the same chain. `ethclient.BlockNumber` sends `eth_blockNumber`, so most go-ethereum apps get head metrics with no change.
+Head freshness comes from traffic you already send. When a wrapped request includes `eth_blockNumber` and the answer is a successful hex block number, that block updates the head, head age, last-advance and lag gauges for that chain and provider. A batch entry counts too. No extra request is made. Head gauges are exported while observations stay fresh, up to 120 seconds after the last one, so an app that stops polling does not raise a false stale-head incident. With one observed provider, lag is zero. A second fresh provider on the same chain makes comparison possible. `ethclient.BlockNumber` sends `eth_blockNumber`, so most go-ethereum apps get head metrics with no change.
 
 If your app never calls `eth_blockNumber`, run a separate head probe through an unwrapped client and call `telemetry.RecordProbe(url, chain, &head)`, or `nil` on failure. Probe results are also counted in `rpc_xray_probe_requests_total`. With no head observations, head gauges are absent. Metrics scrapes do not send RPC requests.
 
@@ -62,4 +62,4 @@ go test -race ./...
 go vet ./...
 ```
 
-The [complete server example](../examples/plain-go/README.md) includes polling, `/metrics`, shutdown, and a matching Prometheus configuration.
+The [complete server example](https://github.com/SolidRPC/rpc-xray/blob/main/examples/plain-go/README.md) includes polling, `/metrics`, shutdown, and a matching Prometheus configuration.

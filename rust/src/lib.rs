@@ -98,6 +98,7 @@ impl State {
                 if now - state.1 > STALE_SECONDS {
                     self.stale_seen = true;
                 }
+                state.0 = head;
                 state.2 = now;
             }
             _ => {
@@ -528,6 +529,7 @@ mod metric_tests {
         for body in [
             r#"{"id":1,"result":"0x1"}"#,
             r#"{"id":1,"result":"latest"}"#,
+            r#"{"id":1,"result":"0x+abc"}"#,
             r#"{"id":1,"error":{"code":-32000,"message":"x"}}"#,
         ] {
             finish(&xray, "https://rpc.example", BLOCK, 200, body);
@@ -548,7 +550,7 @@ mod metric_tests {
         );
         let metrics = xray.metrics();
         assert!(
-            metrics.contains("rpc_xray_head_block{chain=\"ethereum\",provider=\"rpc.example\"} 32")
+            metrics.contains("rpc_xray_head_block{chain=\"ethereum\",provider=\"rpc.example\"} 1")
         );
         assert!(
             !metrics.contains("rpc_xray_head_block{chain=\"ethereum\",provider=\"other.example\"}")

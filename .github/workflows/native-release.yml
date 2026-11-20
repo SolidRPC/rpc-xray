@@ -1,0 +1,128 @@
+name: Native SDK release
+run-name: Prepare ${{ inputs.sdk }} ${{ inputs.version }} (publish=${{ inputs.publish }})
+on:
+  workflow_dispatch:
+    inputs:
+      sdk:
+        description: SDK to prepare
+        type: choice
+        options: [python, go, rust]
+        required: true
+      version:
+        description: Exact package version (without v)
+        type: string
+        required: true
+      publish:
+        description: Publish the package or create the Go module tag
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-release-${{ inputs.sdk }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    if: github.repository == 'SolidRPC/rpc-xray' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require successful main CI for this commit and verify version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SDK: ${{ inputs.sdk }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          python3 scripts/release/native-version.py "$SDK" "$VERSION"
+          run=$(gh run list --workflow ci.yml --branch main --event push --commit "$GITHUB_SHA" --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          [[ "$run" =~ ^[0-9]+$ ]]
+          mkdir dist
+          case "$SDK" in
+            python|rust) gh run download "$run" --name "$SDK-package" --dir dist ;;
+            go)
+              git archive --format=tar.gz --prefix=rpc-xray-go/ -o "dist/go-v$VERSION.tar.gz" "${GITHUB_SHA}:go"
+              if git ls-remote --exit-code --tags origin "refs/tags/go/v$VERSION"; then exit 1; else test "$?" = 2; fi ;;
+          esac
+          (cd dist && sha256sum *) >> "$GITHUB_STEP_SUMMARY"
+      - name: Check Python distributions
+        if: inputs.sdk == 'python'
+        run: |
+          pipx run --spec twine twine check --strict dist/*
+      - uses: dtolnay/rust-toolchain@stable
+        if: inputs.sdk == 'rust'
+      - name: Verify crates.io dry run and archive
+        if: inputs.sdk == 'rust'
+        working-directory: rust
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          cargo publish --dry-run --locked --all-features --registry crates-io
+          cmp "../dist/solidrpc-rpc-xray-$VERSION.crate" "target/package/solidrpc-rpc-xray-$VERSION.crate"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: candidate-${{ inputs.sdk }}
+          path: dist/*
+          if-no-files-found: error
+
+  pypi:
+    if: inputs.sdk == 'python' && inputs.publish
+    needs: prepare
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: candidate-python
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086
+
+  crates:
+    if: inputs.sdk == 'rust' && inputs.publish
+    needs: prepare
+    runs-on: ubuntu-latest
+    environment: crates-io
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/download-artifact@v4
+        with:
+          name: candidate-rust
+          path: dist
+      - name: Compare release archive with tested package
+        working-directory: rust
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          cargo package --locked --all-features
+          cmp "../dist/solidrpc-rpc-xray-$VERSION.crate" "target/package/solidrpc-rpc-xray-$VERSION.crate"
+      - name: Publish from the verified source
+        working-directory: rust
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --locked --all-features --registry crates-io
+
+  go-tag:
+    if: inputs.sdk == 'go' && inputs.publish
+    needs: prepare
+    runs-on: ubuntu-latest
+    environment: go-release
+    permissions:
+      contents: write
+    steps:
+      - name: Create version tag on the tested revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/go/v$VERSION" -f "sha=$GITHUB_SHA"

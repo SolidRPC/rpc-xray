@@ -141,6 +141,11 @@ pub(crate) fn classify(
         return all("rpc_error");
     };
     let Value::Array(items) = payload else {
+        let global_error = payload.get("id").is_none_or(Value::is_null)
+            && payload.get("error").is_some_and(|value| !value.is_null());
+        if request.batch && !global_error {
+            return all("rpc_error");
+        }
         return all(outcome(&payload));
     };
     let by_id: BTreeMap<String, &str> = items
@@ -170,7 +175,10 @@ pub(crate) fn classify(
 fn hex_head(value: Option<&Value>) -> Option<u64> {
     let text = value?.as_str()?;
     let digits = text.strip_prefix("0x")?;
-    if digits.is_empty() || digits.len() > 16 {
+    if digits.is_empty()
+        || digits.len() > 16
+        || !digits.bytes().all(|byte| byte.is_ascii_hexdigit())
+    {
         return None;
     }
     u64::from_str_radix(digits, 16).ok()

@@ -10,7 +10,7 @@ The crate name is `solidrpc-rpc-xray` and the import is `solidrpc_rpc_xray`. Thi
 cargo add solidrpc-rpc-xray
 ```
 
-For development, use a path dependency pointing to this directory. The [complete example](../examples/plain-rust/README.md) already uses one. Package builds do not publish anything.
+For development, use a path dependency pointing to this directory. The [complete example](https://github.com/SolidRPC/rpc-xray/blob/main/examples/plain-rust/README.md) already uses one. Package builds do not publish anything.
 
 ## reqwest
 
@@ -62,7 +62,7 @@ fn integrate(existing_http: reqwest::Client, url: reqwest::Url) {
 }
 ```
 
-Expose the same `telemetry.metrics()` at `/metrics`. The [complete Alloy example](../examples/alloy/README.md) includes the provider, HTTP server, shutdown handling, and matching Prometheus configuration. Its build and mock integration test run in CI.
+Expose the same `telemetry.metrics()` at `/metrics`. The [complete Alloy example](https://github.com/SolidRPC/rpc-xray/blob/main/examples/alloy/README.md) includes the provider, HTTP server, shutdown handling, and matching Prometheus configuration. Its build and mock integration test run in CI.
 
 `XrayHttp` observes HTTP status before Alloy decodes JSON-RPC errors. HTTP 500 is `http_error` and HTTP 429 is `rate_limited`, even when the body is a valid JSON-RPC error or success packet. The packets and errors returned to Alloy callers match its HTTP transport, including error bodies and `Retry-After`. Inspection is bounded by `max_body_bytes`. Like Alloy's HTTP transport, it reads the full response body for decoding, with no additional reads for telemetry. It does not change your client headers, timeout, retry, redirect, or TLS configuration and makes no discovery or probe calls.
 
@@ -72,11 +72,11 @@ The unreleased `XrayLayer` packet adapter has been replaced by `XrayHttp`. Packe
 
 ## Metrics and optional probes
 
-The [shared contract](../spec/README.md) supplies the same labels, buckets, and seven error outcomes as the other SDKs. Unknown methods use `other`. Provider labels contain only the host and any non-default port. Endpoint and metric-series counts are bounded.
+The [shared contract](https://github.com/SolidRPC/rpc-xray/blob/main/spec/README.md) supplies the same labels, buckets, and seven error outcomes as the other SDKs. Unknown methods use `other`. Provider labels contain only the host and any non-default port. Endpoint and metric-series counts are bounded.
 
 The SDK adds no RPC calls. Supply a chain label explicitly. It does not detect chains or run head probes. `Options` accepts `max_body_bytes`, `value_per_request`, `revenue_per_hour`, `offers`, and `logger`.
 
-Head freshness comes from traffic you already send. When a wrapped request includes `eth_blockNumber` and the answer is a successful hex block number, that block updates the head, head age, last-advance and lag gauges for that chain and provider. A batch entry counts too. No extra request is made. Head gauges are exported while observations stay fresh, up to 120 seconds after the last one, so an app that stops polling does not raise a false stale-head incident. Lag needs two or more providers for the same chain. Alloy's `get_block_number` sends `eth_blockNumber`, so most Alloy apps get head metrics with no change.
+Head freshness comes from traffic you already send. When a wrapped request includes `eth_blockNumber` and the answer is a successful hex block number, that block updates the head, head age, last-advance and lag gauges for that chain and provider. A batch entry counts too. No extra request is made. Head gauges are exported while observations stay fresh, up to 120 seconds after the last one, so an app that stops polling does not raise a false stale-head incident. With one observed provider, lag is zero. A second fresh provider on the same chain makes comparison possible. Alloy's `get_block_number` sends `eth_blockNumber`, so most Alloy apps get head metrics with no change.
 
 If your app never calls `eth_blockNumber`, call `telemetry.record_probe(url, chain, Some(head))`, or `None` on failure, after a separate unwrapped probe. Probe results are also counted in `rpc_xray_probe_requests_total`. With no head observations, head gauges remain absent. Scraping metrics never contacts an RPC endpoint.
 
