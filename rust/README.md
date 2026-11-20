@@ -4,7 +4,7 @@ Prometheus metrics for reqwest 0.13 and Alloy 2.5 HTTP JSON-RPC clients. Rust 1.
 
 ## Install
 
-The crate name is `solidrpc-rpc-xray` and the import is `solidrpc_rpc_xray`. This SDK is not published yet. After its first crates.io release:
+The crate name is `solidrpc-rpc-xray` and the import is `solidrpc_rpc_xray`. Install a released version from crates.io with Cargo.
 
 ```bash
 cargo add solidrpc-rpc-xray

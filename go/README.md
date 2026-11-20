@@ -4,13 +4,13 @@ A standard-library HTTP transport wrapper with Prometheus metrics. Go 1.23 or ne
 
 ## Install
 
-The module path is `github.com/SolidRPC/rpc-xray/go`. After the first Go release tag:
+The module path is `github.com/SolidRPC/rpc-xray/go`. Install the tagged module with the Go CLI.
 
 ```bash
 go get github.com/SolidRPC/rpc-xray/go@v0.1.0
 ```
 
-This SDK is not released yet. For development, add a local `replace` directive pointing to this directory, as the [complete example](https://github.com/SolidRPC/rpc-xray/blob/main/examples/plain-go/go.mod) does. Releases from this subdirectory require tags such as `go/v0.1.0`.
+For development, add a local `replace` directive pointing to this directory, as the [complete example](https://github.com/SolidRPC/rpc-xray/blob/main/examples/plain-go/go.mod) does. Releases from this subdirectory require tags such as `go/v0.1.0`.
 
 ## Integrate
 

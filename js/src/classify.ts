@@ -81,7 +81,13 @@ export function classifyResponse(
   } catch {
     return all(request, "rpc_error");
   }
-  if (!Array.isArray(parsed)) return all(request, outcomeOfResponseObject(parsed));
+  if (!Array.isArray(parsed)) {
+    const globalError = isRecord(parsed) && parsed.id == null && parsed.error != null;
+    return all(
+      request,
+      request.batch && !globalError ? "rpc_error" : outcomeOfResponseObject(parsed),
+    );
+  }
   const byId = new Map<string, Outcome>();
   for (const item of parsed) {
     if (isRecord(item)) byId.set(JSON.stringify(item.id ?? null), outcomeOfResponseObject(item));

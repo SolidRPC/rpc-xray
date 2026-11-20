@@ -250,7 +250,13 @@ test("the head probe reports head, age and lag", async () => {
   assert.match(text, /rpc_xray_probe_requests_total\{[^}]*result="ok"\} \d+/);
   assert.match(text, /rpc_xray_head_age_seconds\{/);
   assert.doesNotMatch(text, /method="eth_blockNumber"/);
-  instance.close();
+  mock.head = 85;
+  try {
+    await until(() => instance.metrics(), /rpc_xray_head_lag_blocks\{[^}]*\} 5\n/);
+  } finally {
+    mock.head = 100;
+    instance.close();
+  }
 });
 
 test("works as a viem transport", async () => {

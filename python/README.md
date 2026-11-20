@@ -4,13 +4,13 @@ Prometheus metrics for HTTPX sync and async clients, requests, and web3.py's syn
 
 ## Install
 
-The package name is `solidrpc-rpc-xray` and the import is `rpc_xray`. This SDK is not published yet. After its first PyPI release:
+The package name is `solidrpc-rpc-xray` and the import is `rpc_xray`. Install a released version from PyPI with pip.
 
 ```bash
 pip install solidrpc-rpc-xray
 ```
 
-Before publication, build and install the distributable wheel from the repository root. This example includes the requests adapter and web3.py:
+To test an unreleased version, build and install the distributable wheel from the repository root. This example includes the requests adapter and web3.py:
 
 ```bash
 python3 -m venv .venv
@@ -48,7 +48,7 @@ Raw `iter_raw()` / `aiter_raw()` reads retain their original wire bytes. Compres
 
 ## requests and web3.py
 
-Install the `requests` extra with `pip install 'solidrpc-rpc-xray[requests]'` after publication. Before publication, use the wheel installation recipe above. Install `web3` separately when using its HTTPProvider.
+Install the `requests` extra with `pip install 'solidrpc-rpc-xray[requests]'` for a released version. Use the wheel installation recipe above for an unreleased version. Install `web3` separately when using its HTTPProvider.
 
 ```python
 import requests

@@ -126,6 +126,17 @@ jobs:
       - name: Test the running go-ethereum app
         run: python3 scripts/test-example.py go-ethereum
 
+  rust-minimum:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.94.1
+      - name: Check supported features on the minimum Rust version
+        working-directory: rust
+        run: cargo check --locked --all-features
+
   rust:
     runs-on: ubuntu-latest
     steps:
