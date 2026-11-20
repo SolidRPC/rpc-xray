@@ -1,7 +1,9 @@
 package rpcxray
 
 import (
+	"bytes"
 	"encoding/json"
+	"math/big"
 	"strconv"
 	"strings"
 )
@@ -50,23 +52,49 @@ type request struct {
 }
 
 func idKey(value any) string {
-	if number, ok := value.(json.Number); ok {
-		if integer, err := number.Int64(); err == nil {
-			return strconv.FormatInt(integer, 10)
-		}
-		if numeric, err := number.Float64(); err == nil {
-			return strconv.FormatFloat(numeric, 'f', -1, 64)
-		}
+	number, ok := value.(json.Number)
+	if !ok {
+		encoded, _ := json.Marshal(value)
+		return string(encoded)
 	}
-	encoded, _ := json.Marshal(value)
-	return string(encoded)
+	mantissa := number.String()
+	var exponent big.Int
+	if split := strings.IndexAny(mantissa, "eE"); split >= 0 {
+		exponent.SetString(mantissa[split+1:], 10)
+		mantissa = mantissa[:split]
+	}
+	sign := ""
+	if strings.HasPrefix(mantissa, "-") {
+		sign = "-"
+		mantissa = mantissa[1:]
+	}
+	integer, fraction, _ := strings.Cut(mantissa, ".")
+	digits := strings.TrimLeft(integer+fraction, "0")
+	if digits == "" {
+		return "0"
+	}
+	significand := strings.TrimRight(digits, "0")
+	shift := len(digits) - len(significand) - len(fraction)
+	exponent.Add(&exponent, big.NewInt(int64(shift)))
+	if exponent.Sign() == 0 {
+		return sign + significand
+	}
+	return sign + significand + "e" + exponent.String()
+}
+
+func decodeJSON(body []byte) (any, bool) {
+	var payload any
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	if !json.Valid(body) || decoder.Decode(&payload) != nil {
+		return nil, false
+	}
+	return payload, true
 }
 
 func parseRequest(body []byte) *request {
-	var payload any
-	decoder := json.NewDecoder(strings.NewReader(string(body)))
-	decoder.UseNumber()
-	if !json.Valid(body) || decoder.Decode(&payload) != nil {
+	payload, valid := decodeJSON(body)
+	if !valid {
 		return nil
 	}
 	items, batch := payload.([]any)
@@ -103,7 +131,8 @@ func parseRequest(body []byte) *request {
 
 func rpcError(value any) string {
 	object, _ := value.(map[string]any)
-	code, hasCode := object["code"].(float64)
+	numeric, hasCode := object["code"].(json.Number)
+	code, _ := numeric.Float64()
 	message, _ := object["message"].(string)
 	message = strings.ToLower(message)
 	if code == 429 {
@@ -166,34 +195,25 @@ func classify(r *request, status int, body []byte, failure string) []Entry {
 	if body == nil {
 		return all("ok")
 	}
-	var payload any
-	if json.Unmarshal(body, &payload) != nil {
+	payload, valid := decodeJSON(body)
+	if !valid {
 		return all("rpc_error")
 	}
 	items, batch := payload.([]any)
 	if !batch {
+		if r.batch {
+			object, _ := payload.(map[string]any)
+			if object["error"] == nil || object["id"] != nil {
+				return all("rpc_error")
+			}
+		}
 		return all(responseOutcome(payload))
 	}
-	var rawItems []json.RawMessage
-	if json.Unmarshal(body, &rawItems) != nil {
-		return all("rpc_error")
-	}
 	byID := map[string]string{}
-	for i, item := range items {
-		if _, ok := item.(map[string]any); !ok {
-			continue
+	for _, item := range items {
+		if object, ok := item.(map[string]any); ok {
+			byID[idKey(object["id"])] = responseOutcome(object)
 		}
-		var raw map[string]json.RawMessage
-		_ = json.Unmarshal(rawItems[i], &raw)
-		id := raw["id"]
-		if id == nil {
-			id = []byte("null")
-		}
-		var normalized any
-		decoder := json.NewDecoder(strings.NewReader(string(id)))
-		decoder.UseNumber()
-		_ = decoder.Decode(&normalized)
-		byID[idKey(normalized)] = responseOutcome(item)
 	}
 	entries := all("rpc_error")
 	for i, c := range r.calls {
@@ -226,10 +246,8 @@ func headFrom(r *request, body []byte) (uint64, bool) {
 	if len(ids) == 0 {
 		return 0, false
 	}
-	var payload any
-	decoder := json.NewDecoder(strings.NewReader(string(body)))
-	decoder.UseNumber()
-	if !json.Valid(body) || decoder.Decode(&payload) != nil {
+	payload, valid := decodeJSON(body)
+	if !valid {
 		return 0, false
 	}
 	items, batch := payload.([]any)

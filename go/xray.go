@@ -81,6 +81,7 @@ func (x *Xray) observeHead(base labels, head uint64) {
 	if now.Sub(previous.advanced).Seconds() > staleSeconds {
 		x.staleSeen = true
 	}
+	previous.block = head
 	previous.seen = now
 	x.heads[base] = previous
 }

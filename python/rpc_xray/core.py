@@ -103,6 +103,9 @@ def classify(request, status=200, body=None, failure=None):
         return "ok" if "result" in item else "rpc_error"
 
     if not isinstance(payload, list):
+        if request[0] and isinstance(payload, dict):
+            if payload.get("id") is not None or payload.get("error") is None:
+                return all_calls("rpc_error")
         return all_calls(outcome(payload))
     by_id = {
         _id_key(item.get("id")): outcome(item)
@@ -243,7 +246,7 @@ class Xray:
             return
         if now - previous[1] > STALE_SECONDS:
             self._stale_seen = True
-        self._heads[base] = (previous[0], previous[1], now)
+        self._heads[base] = (head, previous[1], now)
 
     def _offer_line(self):
         if self._offered or not self.offers:

@@ -237,7 +237,7 @@ func TestPassiveHeadFromBlockNumberAnswers(t *testing.T) {
 		x.Start("https://rpc.example", "ethereum", []byte(`{"id":1,"method":"eth_blockNumber"}`)).Finish(200, []byte(body), "")
 	}
 	x.Start("https://rpc.example", "ethereum", []byte(`{"id":1,"method":"eth_blockNumber"}`)).Finish(500, []byte(`{"id":1,"result":"0x99"}`), "")
-	if got := gaugeLine(x, "rpc_xray_head_block", "rpc.example"); got != "32" {
+	if got := gaugeLine(x, "rpc_xray_head_block", "rpc.example"); got != "1" {
 		t.Fatal(got)
 	}
 	x.Start("https://other.example", "ethereum", []byte(`{"id":1,"method":"eth_call"}`)).Finish(200, []byte(`{"id":1,"result":"0x99"}`), "")
@@ -305,5 +305,65 @@ func TestOfferRequiresProblemsVolumeAndConsent(t *testing.T) {
 	run(panicky, 24*time.Hour, 39_999_999, 5_000_000)
 	if !panicky.offered {
 		t.Fatal("offer not attempted")
+	}
+}
+
+func TestExactNumericBatchIDs(t *testing.T) {
+	for _, tc := range []struct{ headID, balanceID, returnedID string }{
+		{"9223372036854775808", "9223372036854775809", "9223372036854775809"},
+		{"-9223372036854775809", "-9223372036854775810", "-922337203685477581e1"},
+		{"9223372036854775808e200", "9223372036854775809e200", "92233720368547758090e199"},
+		{"0.10000000000000001", "0.10000000000000002", "10000000000000002e-17"},
+		{"1e12345678912345678912", "1e12345678912345678913", "10e12345678912345678912"},
+		{"1", "-0.0e2", "0"},
+	} {
+		req := parseRequest([]byte(`[{"id":` + tc.headID + `,"method":"eth_blockNumber"},{"id":` + tc.balanceID + `,"method":"eth_getBalance"}]`))
+		response := []byte(`[{"id":` + tc.returnedID + `,"result":"0xeeee"}]`)
+		want := []Entry{{"eth_blockNumber", "rpc_error"}, {"eth_getBalance", "ok"}}
+		if got := classify(req, 200, response, ""); !reflect.DeepEqual(got, want) {
+			t.Errorf("ids %+v got %v, want %v", tc, got, want)
+		}
+		if n, ok := headFrom(req, response); ok {
+			t.Errorf("ids %+v assigned balance %d to head", tc, n)
+		}
+	}
+}
+
+func TestSingletonBatchClassification(t *testing.T) {
+	req := parseRequest([]byte(`[{"id":1,"method":"eth_blockNumber"},{"id":2,"method":"eth_getBalance"}]`))
+	for _, tc := range []struct{ response, outcome string }{
+		{`{"id":1,"result":"0x10"}`, "rpc_error"},
+		{`{"id":2,"result":"0xeeee"}`, "rpc_error"},
+		{`{"id":2,"error":{"code":429}}`, "rpc_error"},
+		{`{"id":null,"result":"0xeeee"}`, "rpc_error"},
+		{`{"id":null,"error":{"code":429}}`, "rate_limited"},
+		{`{"error":{"code":-32602}}`, "caller_error"},
+	} {
+		if got := classify(req, 200, []byte(tc.response), ""); !reflect.DeepEqual(got, []Entry{{"eth_blockNumber", tc.outcome}, {"eth_getBalance", tc.outcome}}) {
+			t.Errorf("%s yielded %v", tc.response, got)
+		}
+	}
+	if n, ok := headFrom(req, []byte(`{"id":1,"result":"0x10"}`)); !ok || n != 16 {
+		t.Fatal(n, ok)
+	}
+}
+
+func TestServedHeadRollbackAndRecovery(t *testing.T) {
+	x := New(Options{})
+	base := labels{chain: "ethereum", provider: "rpc.example"}
+	now := time.Now()
+	past := now.Add(-time.Minute)
+	x.heads[base] = headState{block: 100, advanced: past, seen: past}
+	x.heads[labels{chain: "ethereum", provider: "peer.example"}] = headState{block: 101, advanced: now, seen: now}
+	for _, head := range []uint64{95, 95} {
+		x.observeHead(base, head)
+		state := x.heads[base]
+		if state.advanced != past || !state.seen.After(past) || gaugeLine(x, "rpc_xray_head_block", "rpc.example") != "95" || gaugeLine(x, "rpc_xray_head_lag_blocks", "rpc.example") != "6" {
+			t.Fatalf("rollback metrics: %s", x.Metrics())
+		}
+	}
+	x.observeHead(base, 96)
+	if !x.heads[base].advanced.After(past) || gaugeLine(x, "rpc_xray_head_lag_blocks", "rpc.example") != "5" {
+		t.Fatalf("recovery metrics: %s", x.Metrics())
 	}
 }

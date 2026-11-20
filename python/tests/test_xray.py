@@ -200,7 +200,7 @@ def test_probe_metrics_concurrency_and_limits():
         if s.name == "rpc_xray_head_lag_blocks"
         and s.labels["provider"] == "rpc.example"
     )
-    assert lag.value == 4
+    assert lag.value == 10
     assert len([s for s in values if s.name.endswith("duration_seconds_bucket")]) == 10
     for i in range(40):
         xray.start(f"https://rpc{i}.example", "ethereum", REQUEST).finish(200, OK)
@@ -295,7 +295,7 @@ def test_passive_head_from_block_number_answers():
     xray.start("https://rpc.example", "ethereum", batch).finish(200, answer)
     assert gauge(xray, "rpc_xray_head_block") == 32
     for body in (
-        b'{"id":1,"result":"0x1"}',
+        b'{"id":2,"result":"0x1"}',
         b'{"id":1,"result":"latest"}',
         b'{"id":1,"error":{"code":-32000,"message":"x"}}',
     ):
@@ -306,6 +306,51 @@ def test_passive_head_from_block_number_answers():
     xray.start("https://other.example", "ethereum", call).finish(200, b'{"id":1,"result":"0x99"}')
     assert gauge(xray, "rpc_xray_head_block", "other.example") is None
     assert gauge(xray, "rpc_xray_probe_requests_total") is None
+
+
+@pytest.mark.parametrize(
+    "response,expected,head",
+    [
+        ({"id": 1, "result": "0x20"}, "rpc_error", 32),
+        ({"id": 2, "result": "0x20"}, "rpc_error", None),
+        ({"id": None, "result": "0x20"}, "rpc_error", None),
+        ({"id": 1, "error": {"code": 429}}, "rpc_error", None),
+        ({"id": None, "error": {"code": 429}}, "rate_limited", None),
+        ({"error": {"code": -32600}}, "caller_error", None),
+    ],
+)
+def test_batch_single_object(response, expected, head):
+    xray = Xray()
+    batch = b'[{"id":1,"method":"eth_blockNumber"},{"id":2,"method":"eth_getBalance"}]'
+    xray.start("https://rpc.example", "ethereum", batch).finish(
+        200, json.dumps(response).encode()
+    )
+    counts = [s for s in samples(xray) if s.name == "rpc_xray_requests_total"]
+    assert {(s.labels["method"], s.labels["outcome"], s.value) for s in counts} == {
+        ("eth_blockNumber", expected, 1),
+        ("eth_getBalance", expected, 1),
+    }
+    assert gauge(xray, "rpc_xray_head_block") == head
+
+
+def test_relative_head_lag_after_backwards_observation(monkeypatch):
+    xray = Xray()
+    url = "https://rpc.example"
+    peer = "https://peer.example"
+    monkeypatch.setattr(time, "time", lambda: 1000)
+    xray.record_probe(url, "ethereum", 160)
+    xray.record_probe(peer, "ethereum", 159)
+    for timestamp in (1001, 1002):
+        monkeypatch.setattr(time, "time", lambda: timestamp)
+        xray.start(url, "ethereum", REQUEST).finish(200, b'{"id":1,"result":"0x96"}')
+        assert gauge(xray, "rpc_xray_head_block") == 150
+        assert gauge(xray, "rpc_xray_head_lag_blocks") == 9
+        assert gauge(xray, "rpc_xray_head_lag_blocks", "peer.example") == 0
+        assert gauge(xray, "rpc_xray_head_last_advance_timestamp_seconds") == 1000
+    monkeypatch.setattr(time, "time", lambda: 1003)
+    xray.record_probe(url, "ethereum", 151)
+    assert gauge(xray, "rpc_xray_head_lag_blocks") == 8
+    assert gauge(xray, "rpc_xray_head_last_advance_timestamp_seconds") == 1003
 
 
 def test_passive_head_expires_when_app_stops_polling():
