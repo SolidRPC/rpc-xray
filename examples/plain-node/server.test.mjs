@@ -45,8 +45,9 @@ test("plain Node serves metrics without extra RPCs and shuts down polling", asyn
   );
   assert.doesNotMatch(
     metrics,
-    /secret-path|secret-query|rpc_xray_head_block|rpc_xray_probe_requests_total/,
+    /secret-path|secret-query|rpc_xray_probe_requests_total/,
   );
+  assert.match(metrics, /rpc_xray_head_block\{[^}]+\} 4660/);
   assert.equal(calls.length, 1);
   assert.equal((await (await fetch(url)).json()).blockNumber, "0x1234");
   assert.equal((await fetch(`${url}/other`)).status, 404);

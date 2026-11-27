@@ -43,8 +43,9 @@ type Entry struct {
 	Outcome string `json:"outcome"`
 }
 type call struct {
-	id     string
-	method string
+	id          string
+	method      string
+	latestBlock bool
 }
 type request struct {
 	batch bool
@@ -124,7 +125,9 @@ func parseRequest(body []byte) *request {
 		if !known {
 			method = "other"
 		}
-		r.calls = append(r.calls, call{idKey(object["id"]), method})
+		params, _ := object["params"].([]any)
+		latest := method == "eth_getBlockByNumber" && len(params) > 0 && params[0] == "latest"
+		r.calls = append(r.calls, call{idKey(object["id"]), method, latest})
 	}
 	return r
 }
@@ -239,8 +242,8 @@ func headFrom(r *request, body []byte) (uint64, bool) {
 	}
 	ids := map[string]bool{}
 	for _, c := range r.calls {
-		if c.method == "eth_blockNumber" {
-			ids[c.id] = true
+		if c.method == "eth_blockNumber" || c.latestBlock {
+			ids[c.id] = c.latestBlock
 		}
 	}
 	if len(ids) == 0 {
@@ -261,10 +264,16 @@ func headFrom(r *request, body []byte) (uint64, bool) {
 		if !ok || object["error"] != nil {
 			continue
 		}
-		if object["id"] == nil || !ids[idKey(object["id"])] {
+		latest, matches := ids[idKey(object["id"])]
+		if object["id"] == nil || !matches {
 			continue
 		}
-		if head, ok := hexHead(object["result"]); ok && (!found || head > best) {
+		result := object["result"]
+		if latest {
+			block, _ := result.(map[string]any)
+			result = block["number"]
+		}
+		if head, ok := hexHead(result); ok && (!found || head > best) {
 			best, found = head, true
 		}
 	}

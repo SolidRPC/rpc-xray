@@ -18,9 +18,18 @@ tests:
       - series: 'rpc_xray_requests_total{chain="ethereum", provider="a.example", method="eth_call", outcome="http_error"}'
         values: "0+0x9000 0+2400x60 144000+0x1019"
       - series: "rpc_xray_offers_enabled"
-        values: "1x10080"
+        values: "0x10019 1x60"
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="RpcXrayTrialOffer", alertstate="pending"})
+        eval_time: 10075m
+        exp_samples:
+          - labels: '{}'
+            value: 1
     alert_rule_test:
       - eval_time: 8000m
+        alertname: RpcXrayTrialOffer
+        exp_alerts: []
+      - eval_time: 10075m
         alertname: RpcXrayTrialOffer
         exp_alerts: []
       - eval_time: 10080m

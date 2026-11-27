@@ -76,9 +76,9 @@ The [shared specification](https://github.com/SolidRPC/rpc-xray/blob/main/spec/R
 
 The SDK adds no RPC calls. It does not detect chains or schedule probes. Supply `chain` explicitly or get `unknown`. Optional `value_per_request` and `revenue_per_hour` constructor values enable the corresponding USD gauges.
 
-Head freshness comes from traffic you already send. When a wrapped request includes `eth_blockNumber` and the answer is a successful hex block number, that block updates the head, head age, last-advance and lag gauges for that chain and provider. A batch entry counts too. No extra request is made. Head gauges are exported while observations stay fresh, up to 120 seconds after the last one, so an app that stops polling does not raise a false stale-head incident. With one observed provider, lag is zero. A second fresh provider on the same chain makes comparison possible.
+Head freshness comes from traffic you already send. A successful `eth_blockNumber` response or a block object returned by `eth_getBlockByNumber("latest", false)` or its full-transaction variant updates the head, head age, last-advance and lag gauges for that chain and provider. A batch entry counts too. No extra request is made. Head gauges are exported while observations stay fresh, up to 120 seconds after the last one, so an app that stops polling does not raise a false stale-head incident. With one observed provider, lag is zero. A second fresh provider on the same chain makes comparison possible.
 
-If your application never calls `eth_blockNumber`, run a separate head probe through an unwrapped client and record it with `telemetry.record_probe(url, chain, head)`, or `head=None` for failure. Probe results are also counted in `rpc_xray_probe_requests_total`. Without any head observations those gauges are absent, not zero. Scraping metrics never sends a request.
+If your application never reads the latest head, run a separate head probe through an unwrapped client and record it with `telemetry.record_probe(url, chain, head)`, or `head=None` for failure. Probe results are also counted in `rpc_xray_probe_requests_total`. Without any head observations those gauges are absent, not zero. Scraping metrics never sends a request.
 
 ## The SolidRPC offer
 

@@ -27,9 +27,10 @@ services:
           printf %s "$$SLACK_WEBHOOK_URL" > /tmp/slack_url
           config=/etc/alertmanager/alertmanager.yml
         fi
-        exec /bin/alertmanager --config.file="$$config" --storage.path=/alertmanager
+        exec /bin/alertmanager --config.file="$$config" --storage.path=/alertmanager --data.retention=744h --web.external-url="$$ALERTMANAGER_EXTERNAL_URL"
     environment:
       SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+      ALERTMANAGER_EXTERNAL_URL: ${ALERTMANAGER_EXTERNAL_URL:-http://localhost:9093}
     volumes:
       - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - ./alertmanager.disabled.yml:/etc/alertmanager/disabled.yml:ro
