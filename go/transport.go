@@ -1,12 +1,15 @@
 package rpcxray
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 )
 
 type Transport struct {
@@ -86,6 +89,7 @@ func (t *Transport) CloseIdleConnections() {
 }
 
 type bodyCapture struct {
+	mu          sync.Mutex
 	inner       io.ReadCloser
 	observation *Observation
 	status, cap int
@@ -98,6 +102,8 @@ type bodyCapture struct {
 
 func (b *bodyCapture) Read(p []byte) (int, error) {
 	n, err := b.inner.Read(p)
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	if !b.done {
 		if len(b.body)+n > b.cap {
 			b.done = true
@@ -123,9 +129,18 @@ func (b *bodyCapture) Read(p []byte) (int, error) {
 }
 func (b *bodyCapture) Close() error {
 	err := b.inner.Close()
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	if !b.done {
 		b.done = true
-		b.observation.Finish(b.status, nil, "")
+		var complete []byte
+		if b.remaining < 0 {
+			captured := bytes.TrimSpace(b.body)
+			if len(captured) > 0 && (captured[0] == '{' || captured[0] == '[') && json.Valid(captured) {
+				complete = captured
+			}
+		}
+		b.observation.Finish(b.status, complete, "")
 	}
 	return err
 }

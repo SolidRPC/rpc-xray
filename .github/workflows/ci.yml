@@ -102,6 +102,7 @@ jobs:
         run: |
           python3 scripts/check-metrics.py /tmp/go-metrics.txt
           mkdir -p tmp
+          go work init ./go ./examples/plain-go
           cd examples/plain-go
           go build -o ../../tmp/rpc-xray-go .
           cd ../..
@@ -118,6 +119,7 @@ jobs:
       - name: Test and build the go-ethereum integration
         working-directory: examples/go-ethereum
         run: |
+          go work init . ../../go
           test -z "$(gofmt -l .)"
           go test -race ./...
           go vet ./...
@@ -165,12 +167,14 @@ jobs:
         run: |
           python3 scripts/check-metrics.py /tmp/rust-metrics.txt
           cargo fmt --manifest-path examples/plain-rust/Cargo.toml --check
-          cargo build --locked --manifest-path examples/plain-rust/Cargo.toml
+          cargo metadata --locked --manifest-path examples/plain-rust/Cargo.toml --format-version 1 > /dev/null
+          cargo build --config "patch.crates-io.solidrpc-rpc-xray.path='$GITHUB_WORKSPACE/rust'" --manifest-path examples/plain-rust/Cargo.toml
           python3 scripts/test-example.py rust
       - name: Build and test the Alloy integration
         run: |
           cargo fmt --manifest-path examples/alloy/Cargo.toml --check
-          cargo build --locked --manifest-path examples/alloy/Cargo.toml
+          cargo metadata --locked --manifest-path examples/alloy/Cargo.toml --format-version 1 > /dev/null
+          cargo build --config "patch.crates-io.solidrpc-rpc-xray.path='$GITHUB_WORKSPACE/rust'" --manifest-path examples/alloy/Cargo.toml
           python3 scripts/test-example.py alloy
       - uses: actions/upload-artifact@v4
         with:

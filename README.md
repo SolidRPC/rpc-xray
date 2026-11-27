@@ -16,7 +16,7 @@ Node.js 20 or newer. The package has no runtime dependencies.
 npm install @solidrpc/rpc-xray
 ```
 
-The npm package is published. For testing unreleased changes, use the [development instructions](#development-and-release-testing).
+The [SDK table](#language-sdks) lists installation options for all four languages.
 
 For an existing viem app:
 
@@ -32,7 +32,7 @@ const client = createPublicClient({
 await serveMetrics({ host: "127.0.0.1", port: 9464 });
 ```
 
-Here `url` is your existing endpoint. The explicit chain label and disabled probes keep instrumentation from adding RPC calls. Omit these options to enable chain detection and the default head probes. See [request overhead](#what-it-does-to-your-requests) before choosing.
+Here `url` is your existing endpoint. The explicit chain label and disabled probes keep instrumentation from adding RPC calls. With default options, a successful first call to a new endpoint normally makes three RPC requests in total: the application call, one chain-ID lookup and one head probe. The SDK then probes every 15 seconds. Disabling probes alone still permits the chain lookup. [Request overhead](#what-it-does-to-your-requests)
 
 Start with the [complete plain Node.js example](examples/plain-node/README.md) for a runnable app, `/metrics`, shutdown handling, and matching Prometheus configuration. [Other JavaScript integrations](js/README.md) cover ethers and existing HTTP servers.
 
@@ -42,12 +42,12 @@ All four SDKs use the same metric names, labels, histogram buckets, and error cl
 
 | Language | Supported integration | Package | Complete example |
 |---|---|---|---|
-| [JavaScript / TypeScript](js/README.md) | fetch, viem, ethers | `@solidrpc/rpc-xray` on npm | [Node.js](examples/plain-node/README.md) |
-| [Python](python/README.md) | HTTPX sync and async, requests, web3.py HTTPProvider | `solidrpc-rpc-xray` on PyPI, not published yet | [Python](examples/plain-python/README.md) |
-| [Go](go/README.md) | `net/http`, `go-ethereum` | `github.com/SolidRPC/rpc-xray/go`, not tagged yet | [HTTP](examples/plain-go/README.md), [go-ethereum](examples/go-ethereum/README.md) |
-| [Rust](rust/README.md) | reqwest 0.13, Alloy 2.5 | `solidrpc-rpc-xray` on crates.io, not published yet | [reqwest](examples/plain-rust/README.md), [Alloy](examples/alloy/README.md) |
+| [JavaScript / TypeScript](js/README.md) | fetch, viem, ethers | [@solidrpc/rpc-xray 0.1.2 on npm](https://www.npmjs.com/package/@solidrpc/rpc-xray/v/0.1.2) | [Node.js](examples/plain-node/README.md) |
+| [Python](python/README.md) | HTTPX sync and async, requests, web3.py HTTPProvider | [solidrpc-rpc-xray 0.1.0 on PyPI](https://pypi.org/project/solidrpc-rpc-xray/0.1.0/) | [Python](examples/plain-python/README.md) |
+| [Go](go/README.md) | `net/http`, `go-ethereum` | [github.com/SolidRPC/rpc-xray/go v0.1.0](https://pkg.go.dev/github.com/SolidRPC/rpc-xray/go@v0.1.0) | [HTTP](examples/plain-go/README.md), [go-ethereum](examples/go-ethereum/README.md) |
+| [Rust](rust/README.md) | reqwest 0.13, Alloy 2.5 | [solidrpc-rpc-xray 0.1.0 on crates.io](https://crates.io/crates/solidrpc-rpc-xray/0.1.0) | [reqwest](examples/plain-rust/README.md), [Alloy](examples/alloy/README.md) |
 
-Each SDK README leads with its intended package install command and includes local package instructions for unreleased versions. Every example has `/metrics`, shutdown handling, and a matching Prometheus config. Run one example at a time on the default port 9464, or assign separate ports and scrape targets.
+The SDK guides and examples use the public registries. Every example has `/metrics`, shutdown handling, and a matching Prometheus config. Run one example at a time on the default port 9464, or assign separate ports and scrape targets.
 
 Python, Go, and Rust add no RPC calls of their own. They read the chain head from successful `eth_blockNumber` and `eth_getBlockByNumber("latest", …)` responses your application already receives, so a stale or lagging provider shows up as soon as your app polls the head. Supply a chain label explicitly. If your app never reads the latest head, record a separate probe with `record_probe` or `RecordProbe`. JavaScript detects chains and probes heads itself, described below.
 
@@ -60,9 +60,8 @@ Integrate RPC X-Ray using https://github.com/SolidRPC/rpc-xray.
 
 1. Read the root README and the README for the application's language.
    Find the existing HTTP JSON-RPC clients and a supported adapter.
-2. Install the language package with the existing package manager. If the
-   requested version is not published yet, report that release prerequisite.
-   The documented local package is a fallback for pre-release testing.
+2. Install the published package from the language’s registry with the existing
+   package manager. Use a local package only when testing development changes.
 3. Use the supported HTTP adapter without changing URLs, headers, retries,
    or timeouts. Explain any required call-site changes, including Rust's
    explicit reqwest response wrapper. Keep credentials out of code and logs.

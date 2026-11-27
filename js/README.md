@@ -16,13 +16,25 @@ To test unreleased changes locally, see the [development instructions](https://g
 
 For a runnable app without a framework, use the [complete plain Node.js example](https://github.com/SolidRPC/rpc-xray/tree/main/examples/plain-node). It includes `/metrics`, a matching Prometheus config, a local mock test and graceful shutdown.
 
+## First-request cost
+
+For a new endpoint, one application call has the following cost when discovery succeeds on the first attempt.
+
+| Fetch wrapper options | First RPC requests | Background requests |
+|---|---:|---|
+| Default | 3 (application, `eth_chainId`, `eth_blockNumber`) | One head probe every 15 seconds |
+| `{ probeIntervalSeconds: 0 }` | 2 (application and `eth_chainId`) | None after discovery |
+| `{ chain: "ethereum", probeIntervalSeconds: 0 }` | 1 (application only) | None |
+
+Set the chain to match your endpoint. Discovery can take up to three attempts. Scraping `/metrics` adds zero RPC requests in all three modes. The examples below use passive measurement.
+
 ## viem
 
 ```ts
 import { createPublicClient, http } from "viem";
 import { xray, serveMetrics } from "@solidrpc/rpc-xray";
 
-const client = createPublicClient({ transport: http(url, { fetchFn: xray(fetch) }) });
+const client = createPublicClient({ transport: http(url, { fetchFn: xray(fetch, { chain: "ethereum", probeIntervalSeconds: 0 }) }) });
 await serveMetrics();
 ```
 
@@ -33,7 +45,7 @@ import { FetchRequest, JsonRpcProvider } from "ethers";
 import { xrayEthers, serveMetrics } from "@solidrpc/rpc-xray";
 
 const request = new FetchRequest(url);
-request.getUrlFunc = xrayEthers();
+request.getUrlFunc = xrayEthers({ chain: "ethereum", probeIntervalSeconds: 0 });
 const provider = new JsonRpcProvider(request);
 await serveMetrics();
 ```
@@ -45,7 +57,7 @@ await serveMetrics();
 ```ts
 import { xray } from "@solidrpc/rpc-xray";
 
-const rpcFetch = xray(fetch);
+const rpcFetch = xray(fetch, { chain: "ethereum", probeIntervalSeconds: 0 });
 const response = await rpcFetch(url, { method: "POST", body: JSON.stringify(call) });
 ```
 

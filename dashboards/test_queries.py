@@ -77,7 +77,7 @@ tests = [
             check("Head lag · blocks", []),
             check("Time since head advanced", []),
             check("Estimated loss · selected range", []),
-            check("Incident history", [('{alertname="No firing incidents"}', 0)]),
+            check("Incident history", [('{incident="Quiet"}', 0)]),
         ],
     ),
     test(
@@ -86,7 +86,7 @@ tests = [
         [
             check("Firing incidents", []),
             check("Pending incidents", []),
-            check("Incident history", []),
+            check("Incident history", [('{incident="Awaiting rules"}', 2)]),
         ],
     ),
     test(
@@ -99,7 +99,6 @@ tests = [
                 "Provider success",
                 "Provider failures",
                 "Firing incidents",
-                "Incident history",
                 "Time since head advanced",
                 "Projected failures · all providers",
                 "SolidRPC offer · fleet",
@@ -135,7 +134,7 @@ tests = [
                 "Incident history",
                 [
                     (
-                        '{alertname="RpcXraySlow",chain="ethereum",provider="west.test"}',
+                        '{alertname="RpcXraySlow",incident="Slow"}',
                         1,
                     )
                 ],
@@ -190,7 +189,7 @@ tests.append(
         "all panel expressions accept an empty datasource",
         [],
         [
-            check(title, [], ref=i)
+            check(title, [('{incident="No samples"}', 3)] if title == "Incident history" else [], ref=i)
             for title, panel in panels.items()
             for i, _ in enumerate(panel.get("targets", []))
         ],

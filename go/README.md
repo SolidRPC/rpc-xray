@@ -10,7 +10,7 @@ The module path is `github.com/SolidRPC/rpc-xray/go`. Install the tagged module 
 go get github.com/SolidRPC/rpc-xray/go@v0.1.0
 ```
 
-For development, add a local `replace` directive pointing to this directory, as the [complete example](https://github.com/SolidRPC/rpc-xray/blob/main/examples/plain-go/go.mod) does. Releases from this subdirectory require tags such as `go/v0.1.0`.
+To test a development checkout, use a temporary Go workspace containing the application and this module. Releases from this subdirectory require tags such as `go/v0.1.0`.
 
 ## Integrate
 
@@ -33,7 +33,7 @@ The [complete go-ethereum example](https://github.com/SolidRPC/rpc-xray/blob/mai
 
 The wrapper only inspects POST bodies that provide `Request.GetBody`. `http.NewRequest` supplies this for `bytes.Reader`, `bytes.Buffer`, and `strings.Reader`. Non-replayable streaming requests are skipped without consuming them. Responses retain their status, headers, and body bytes. The body wrapper copies at most 1 MiB as the caller reads, with no read-ahead or extra network calls. Always close response bodies.
 
-Complete inspected bodies get JSON-RPC classification. Oversized, still-encoded, or prematurely closed bodies use HTTP status only. Read errors preserve the original error and record `network` or `timeout`. Context cancellation and `http.Client.Timeout` count as `timeout`, including cancellation while consuming the response body. A configured deadline alone does not turn an unrelated network failure into a timeout. The wrapper neither retries nor sets deadlines.
+A complete JSON object or batch read by `json.Decoder.Decode` can be classified when you close a chunked response before EOF. The wrapper only examines bytes your application read. Unread, partial, oversized and still-encoded bodies use HTTP status alone. This early-close behavior is in the development version. In v0.1.0, read the bounded response to EOF when you need JSON-RPC error classification for chunked replies. Read errors preserve the original error and record `network` or `timeout`. Context cancellation and `http.Client.Timeout` count as `timeout`, including cancellation while consuming the response body. A configured deadline alone does not turn an unrelated network failure into a timeout. The wrapper neither retries nor sets deadlines.
 
 `rpc_xray_requests_total` counts logical JSON-RPC items. One batch HTTP exchange containing three calls increments this counter three times, with each item's method and outcome. The duration histogram records the exchange once with `method="batch"`. go-ethereum reports item failures on each `rpc.BatchElem.Error`, so a nil error from `BatchCallContext` does not mean every item succeeded. Instrumentation preserves this behavior.
 
