@@ -20,11 +20,11 @@ For a runnable app without a framework, use the [complete plain Node.js example]
 
 For a new endpoint, one application call has the following cost when discovery succeeds on the first attempt.
 
-| Fetch wrapper options | First RPC requests | Background requests |
-|---|---:|---|
-| Default | 3 (application, `eth_chainId`, `eth_blockNumber`) | One head probe every 15 seconds |
-| `{ probeIntervalSeconds: 0 }` | 2 (application and `eth_chainId`) | None after discovery |
-| `{ chain: "ethereum", probeIntervalSeconds: 0 }` | 1 (application only) | None |
+| Fetch wrapper options                            |                                First RPC requests | Background requests             |
+| ------------------------------------------------ | ------------------------------------------------: | ------------------------------- |
+| Default                                          | 3 (application, `eth_chainId`, `eth_blockNumber`) | One head probe every 15 seconds |
+| `{ probeIntervalSeconds: 0 }`                    |                 2 (application and `eth_chainId`) | None after discovery            |
+| `{ chain: "ethereum", probeIntervalSeconds: 0 }` |                              1 (application only) | None                            |
 
 Set the chain to match your endpoint. Discovery can take up to three attempts. Scraping `/metrics` adds zero RPC requests in all three modes. The examples below use passive measurement.
 
@@ -34,7 +34,9 @@ Set the chain to match your endpoint. Discovery can take up to three attempts. S
 import { createPublicClient, http } from "viem";
 import { xray, serveMetrics } from "@solidrpc/rpc-xray";
 
-const client = createPublicClient({ transport: http(url, { fetchFn: xray(fetch, { chain: "ethereum", probeIntervalSeconds: 0 }) }) });
+const client = createPublicClient({
+  transport: http(url, { fetchFn: xray(fetch, { chain: "ethereum", probeIntervalSeconds: 0 }) }),
+});
 await serveMetrics();
 ```
 

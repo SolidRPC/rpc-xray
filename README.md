@@ -32,7 +32,7 @@ const client = createPublicClient({
 await serveMetrics({ host: "127.0.0.1", port: 9464 });
 ```
 
-Here `url` is your existing endpoint. The explicit chain label and disabled probes keep instrumentation from adding RPC calls. With default options, a successful first call to a new endpoint normally makes three RPC requests in total: the application call, one chain-ID lookup and one head probe. The SDK then probes every 15 seconds. Disabling probes alone still permits the chain lookup. [Request overhead](#what-it-does-to-your-requests)
+Here `url` is your existing endpoint. The explicit chain label and disabled probes keep instrumentation from adding RPC calls. With default options, a successful first call to a new endpoint normally makes three RPC requests in total (the application call, one chain-ID lookup and one head probe). The SDK then probes every 15 seconds. Disabling probes alone still permits the chain lookup. [Request overhead](#what-it-does-to-your-requests)
 
 Start with the [complete plain Node.js example](examples/plain-node/README.md) for a runnable app, `/metrics`, shutdown handling, and matching Prometheus configuration. [Other JavaScript integrations](js/README.md) cover ethers and existing HTTP servers.
 
@@ -154,9 +154,11 @@ An incident is something a person would have been paged for. Defaults, per chain
 
 ![Local Grafana rehearsal showing traffic, latency, five firing incidents and provider head lag](assets/dashboard.png)
 
-The overview counts requests from the selected SDK processes at the end of the time range. A failure first scraped at a count of one appears immediately. Counters reset when a process restarts. Provider success includes valid caller rejections, which also appear under **Caller errors**.
+Firing and pending incidents appear at the top, including on mobile. Incident history shows which rules fired within the current chain and provider filters. Select a single provider to isolate its history. **No samples** means no matching request telemetry, **Awaiting rules** means requests arrived before the first incident-rule sample, and **Quiet** means the rules evaluated with no firing incidents.
 
-Traffic, latency and failure-rate charts follow the time picker. Prometheus needs at least two scrapes to estimate a rate or increase. The incident history shows when each rule fired. Head freshness needs recent head observations, and peer lag needs two measured providers on one chain in the same registry.
+The request overview counts requests from the selected SDK processes at the end of the time range. A failure first scraped at a count of one appears immediately. Counters reset when a process restarts. Provider success includes valid caller rejections, which also appear under **Caller errors**.
+
+Traffic, latency and failure-rate charts follow the time picker. Prometheus needs at least two scrapes to estimate a rate or increase. Head freshness needs recent head observations, and peer lag needs two measured providers on one chain in the same registry.
 
 The impact row estimates excess wait and the value of failed calls over the selected range. Set a value per request on each measured instance to include it in the dollar estimate. Edit the success and p95 targets at the top to change the chart reference lines.
 

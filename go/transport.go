@@ -135,7 +135,7 @@ func (b *bodyCapture) Close() error {
 		b.done = true
 		var complete []byte
 		if b.remaining < 0 {
-			captured := bytes.TrimSpace(b.body)
+			captured := bytes.TrimLeft(b.body, " \n\r\t")
 			if len(captured) > 0 && (captured[0] == '{' || captured[0] == '[') && json.Valid(captured) {
 				complete = captured
 			}
