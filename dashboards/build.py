@@ -405,6 +405,7 @@ add(
         },
         "options": {
             "displayMode": "basic",
+            "namePlacement": "left",
             "orientation": "horizontal",
             "showUnfilled": False,
             "reduceOptions": {"calcs": ["lastNotNull"], "values": False},

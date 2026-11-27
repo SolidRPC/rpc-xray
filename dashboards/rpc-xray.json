@@ -533,6 +533,7 @@
       },
       "options": {
         "displayMode": "basic",
+        "namePlacement": "left",
         "orientation": "horizontal",
         "showUnfilled": false,
         "reduceOptions": {

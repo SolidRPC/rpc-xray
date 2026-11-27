@@ -136,6 +136,7 @@ func TestCloseBeforeEOF(t *testing.T) {
 	}{
 		{"chunked fault", fault, -1, "rpc_error"},
 		{"trailing whitespace", fault + " \n", -1, "rpc_error"},
+		{"non-JSON whitespace", fault + "\u00a0", -1, "ok"},
 		{"partial object", fault[:12], -1, "ok"},
 		{"unknown scalar", "42", -1, "ok"},
 		{"unread", "", -1, "ok"},
@@ -177,4 +178,32 @@ type unexpectedRead struct{ t *testing.T }
 func (r unexpectedRead) Read([]byte) (int, error) {
 	r.t.Fatal("telemetry read beyond the consumer")
 	return 0, io.EOF
+}
+
+func TestChunkedBatchDecoderClose(t *testing.T) {
+	const request = `[{"id":1,"method":"eth_blockNumber"},{"id":2,"method":"eth_call"}]`
+	const response = `[{"id":2,"error":{"code":-32603}},{"id":1,"result":"0x10"}]`
+	x := New(Options{})
+	transport := &Transport{Xray: x, Chain: "ethereum", Base: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		chunks := io.MultiReader(strings.NewReader(response), unexpectedRead{t})
+		return &http.Response{StatusCode: 200, ContentLength: -1, Body: io.NopCloser(chunks)}, nil
+	})}
+	req, _ := http.NewRequest("POST", "http://fixture.test", strings.NewReader(request))
+	res, err := transport.RoundTrip(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded []json.RawMessage
+	if err = json.NewDecoder(res.Body).Decode(&decoded); err != nil || len(decoded) != 2 {
+		t.Fatal(decoded, err)
+	}
+	if err = res.Body.Close(); err != nil {
+		t.Fatal(err)
+	}
+	metrics := x.Metrics()
+	for _, sample := range []string{`method="eth_blockNumber",outcome="ok"} 1`, `method="eth_call",outcome="rpc_error"} 1`, `rpc_xray_head_block{chain="ethereum",provider="fixture.test"} 16`} {
+		if !strings.Contains(metrics, sample) {
+			t.Fatalf("missing %s in %s", sample, metrics)
+		}
+	}
 }
