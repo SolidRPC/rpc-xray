@@ -27,7 +27,7 @@ services:
           printf %s "$$SLACK_WEBHOOK_URL" > /tmp/slack_url
           config=/etc/alertmanager/alertmanager.yml
         fi
-        exec /bin/alertmanager --config.file="$$config" --storage.path=/alertmanager
+        exec /bin/alertmanager --config.file="$$config" --storage.path=/alertmanager --data.retention=744h
     environment:
       SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
     volumes:

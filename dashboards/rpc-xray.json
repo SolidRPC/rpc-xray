@@ -1,16 +1,16 @@
 {
   "uid": "rpc-xray",
-  "title": "rpc-xray",
+  "title": "RPC X-Ray \u00b7 Request health",
   "description": "See every request your RPC provider failed.",
   "tags": [
     "rpc-xray"
   ],
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "editable": true,
   "graphTooltip": 1,
   "time": {
-    "from": "now-24h",
+    "from": "now-30m",
     "to": "now"
   },
   "refresh": "30s",
@@ -20,7 +20,8 @@
       {
         "type": "datasource",
         "name": "datasource",
-        "label": "Data source",
+        "hide": 0,
+        "label": "Source",
         "query": "prometheus",
         "current": {}
       },
@@ -73,7 +74,7 @@
       {
         "type": "textbox",
         "name": "target_success",
-        "label": "Target success rate",
+        "label": "Success target",
         "query": "0.9999",
         "current": {
           "text": "0.9999",
@@ -90,7 +91,7 @@
       {
         "type": "textbox",
         "name": "target_p95",
-        "label": "Target p95 (s)",
+        "label": "p95 target (s)",
         "query": "0.3",
         "current": {
           "text": "0.3",
@@ -108,16 +109,19 @@
   },
   "panels": [
     {
-      "type": "row",
-      "title": "Measured traffic and configured targets",
-      "collapsed": false,
-      "panels": [],
+      "type": "text",
+      "title": "",
+      "transparent": true,
+      "options": {
+        "mode": "markdown",
+        "content": "## RPC X-Ray\nCounts cover active SDK processes. Charts follow the time range."
+      },
       "id": 1,
       "gridPos": {
         "x": 0,
         "y": 0,
         "w": 24,
-        "h": 1
+        "h": 3
       },
       "datasource": {
         "type": "prometheus",
@@ -126,28 +130,77 @@
     },
     {
       "type": "stat",
-      "title": "Success rate",
-      "description": "Share of your real RPC requests that got a usable answer in the selected time range. Reverts and invalid requests are your own results and are not counted as failures.",
+      "title": "Requests observed",
+      "description": "Current counters from the selected running exporters. Includes the first observation. Each exporter restarts its counters at zero. The time picker sets the evaluation endpoint.",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "1 - (sum(increase(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\", outcome=~\"http_error|rate_limited|rpc_error|timeout|network\"}[$__range])) or (0 * sum(increase(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}[$__range])))) / sum(increase(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}[$__range]))",
-          "legendFormat": "You",
+          "expr": "sum(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"})",
+          "legendFormat": "Requests observed",
           "refId": "A",
           "instant": true,
           "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "locale",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#b9a4ff"
+          },
+          "mappings": [],
+          "decimals": 0,
+          "noValue": "Unmeasured"
         },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "vertical",
+        "text": {
+          "valueSize": 36
+        },
+        "wideLayout": true
+      },
+      "id": 2,
+      "gridPos": {
+        "x": 0,
+        "y": 3,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Provider success",
+      "description": "Current counters from the selected running exporters. Includes the first observation. Each exporter restarts its counters at zero. The time picker sets the evaluation endpoint. Caller errors count as provider responses. Application success can be lower.",
+      "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "vector($target_success)",
-          "legendFormat": "Configured target",
-          "refId": "B",
+          "expr": "(sum(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}) - (sum(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\", outcome=~\"http_error|rate_limited|rpc_error|timeout|network\"}) or (0 * sum(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"})))) / sum(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"})",
+          "legendFormat": "Provider success",
+          "refId": "A",
           "instant": true,
           "range": false
         }
@@ -157,80 +210,13 @@
           "unit": "percentunit",
           "color": {
             "mode": "fixed",
-            "fixedColor": "#e5484d"
+            "fixedColor": "#c4cbd6"
           },
-          "mappings": [
-            {
-              "type": "special",
-              "options": {
-                "match": "null",
-                "result": {
-                  "text": "No data",
-                  "color": "#747c89"
-                }
-              }
-            },
-            {
-              "type": "special",
-              "options": {
-                "match": "nan",
-                "result": {
-                  "text": "No traffic",
-                  "color": "#747c89"
-                }
-              }
-            }
-          ],
+          "mappings": [],
           "decimals": 2,
-          "noValue": "No data"
+          "noValue": "Unmeasured"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Configured target"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#7c3aed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "You"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "thresholds"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "#e5484d",
-                      "value": null
-                    },
-                    {
-                      "color": "#30a46c",
-                      "value": 0.9999
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "options": {
         "reduceOptions": {
@@ -242,158 +228,20 @@
         },
         "colorMode": "value",
         "graphMode": "none",
-        "textMode": "value_and_name",
-        "justifyMode": "center",
+        "textMode": "value",
+        "justifyMode": "auto",
         "orientation": "vertical",
         "text": {
-          "valueSize": 26,
-          "titleSize": 12
-        }
-      },
-      "id": 2,
-      "gridPos": {
-        "x": 0,
-        "y": 1,
-        "w": 6,
-        "h": 6
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "type": "stat",
-      "title": "p95 latency",
-      "description": "One request in twenty was slower than this in the selected time range.",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "histogram_quantile(0.95, sum by (le) (increase(rpc_xray_request_duration_seconds_bucket{chain=~\"$chain\", provider=~\"$provider\"}[$__range])))",
-          "legendFormat": "You",
-          "refId": "A",
-          "instant": true,
-          "range": false
+          "valueSize": 36
         },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "vector($target_p95)",
-          "legendFormat": "Configured target",
-          "refId": "B",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#e5484d"
-          },
-          "mappings": [
-            {
-              "type": "special",
-              "options": {
-                "match": "null",
-                "result": {
-                  "text": "No data",
-                  "color": "#747c89"
-                }
-              }
-            },
-            {
-              "type": "special",
-              "options": {
-                "match": "nan",
-                "result": {
-                  "text": "No traffic",
-                  "color": "#747c89"
-                }
-              }
-            }
-          ],
-          "decimals": 2,
-          "noValue": "No data"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Configured target"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#7c3aed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "You"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "thresholds"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "#30a46c",
-                      "value": null
-                    },
-                    {
-                      "color": "#e5484d",
-                      "value": 0.3
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value_and_name",
-        "justifyMode": "center",
-        "orientation": "vertical",
-        "text": {
-          "valueSize": 26,
-          "titleSize": 12
-        }
+        "wideLayout": true
       },
       "id": 3,
       "gridPos": {
         "x": 6,
-        "y": 1,
+        "y": 3,
         "w": 6,
-        "h": 6
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -402,62 +250,37 @@
     },
     {
       "type": "stat",
-      "title": "Minutes with an open incident",
-      "description": "Minutes in the selected time range when at least one RPC incident was open: a stale head, a lagging head, failing requests or slow answers.",
+      "title": "Provider failures",
+      "description": "Current counters from the selected running exporters. Includes the first observation. Each exporter restarts its counters at zero. The time picker sets the evaluation endpoint.",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum_over_time(rpc_xray:incident_any:max5m[$__range]) * 5 or vector(0)",
-          "legendFormat": "You",
+          "expr": "(sum(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\", outcome=~\"http_error|rate_limited|rpc_error|timeout|network\"}) or (0 * sum(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"})))",
+          "legendFormat": "Provider failures",
           "refId": "A",
-          "instant": true,
-          "range": false
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "vector(0)",
-          "legendFormat": "Configured target",
-          "refId": "B",
           "instant": true,
           "range": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "m",
+          "unit": "locale",
           "color": {
             "mode": "fixed",
-            "fixedColor": "#e5484d"
+            "fixedColor": "#e8b68e"
           },
           "mappings": [],
-          "decimals": 0
+          "decimals": 0,
+          "noValue": "Unmeasured"
         },
         "overrides": [
           {
             "matcher": {
               "id": "byName",
-              "options": "Configured target"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#7c3aed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "You"
+              "options": "Provider failures"
             },
             "properties": [
               {
@@ -496,20 +319,20 @@
         },
         "colorMode": "value",
         "graphMode": "none",
-        "textMode": "value_and_name",
-        "justifyMode": "center",
+        "textMode": "value",
+        "justifyMode": "auto",
         "orientation": "vertical",
         "text": {
-          "valueSize": 26,
-          "titleSize": 12
-        }
+          "valueSize": 36
+        },
+        "wideLayout": true
       },
       "id": 4,
       "gridPos": {
         "x": 12,
-        "y": 1,
+        "y": 3,
         "w": 6,
-        "h": 6
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -518,16 +341,16 @@
     },
     {
       "type": "stat",
-      "title": "Worst head lag right now",
-      "description": "How far the slowest endpoint is behind the best source of the same chain. Not measured when probes are disabled or have not established a moving head. A zero from one endpoint alone cannot establish freshness.",
+      "title": "Caller errors",
+      "description": "Current counters from the selected running exporters. Includes the first observation. Each exporter restarts its counters at zero. The time picker sets the evaluation endpoint.",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max(rpc_xray:head_lag_seconds{chain=~\"$chain\", provider=~\"$provider\"})",
-          "legendFormat": "You",
+          "expr": "(sum(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\", outcome=\"caller_error\"}) or (0 * sum(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"})))",
+          "legendFormat": "Caller errors",
           "refId": "A",
           "instant": true,
           "range": false
@@ -535,58 +358,16 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
+          "unit": "locale",
           "color": {
             "mode": "fixed",
-            "fixedColor": "#747c89"
+            "fixedColor": "#97b4cf"
           },
-          "mappings": [
-            {
-              "type": "special",
-              "options": {
-                "match": "null",
-                "result": {
-                  "text": "Not measured",
-                  "color": "#747c89"
-                }
-              }
-            }
-          ],
+          "mappings": [],
           "decimals": 0,
-          "noValue": "Not measured"
+          "noValue": "Unmeasured"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "You"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "thresholds"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "#30a46c",
-                      "value": null
-                    },
-                    {
-                      "color": "#e5484d",
-                      "value": 1
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "options": {
         "reduceOptions": {
@@ -598,37 +379,20 @@
         },
         "colorMode": "value",
         "graphMode": "none",
-        "textMode": "value_and_name",
-        "justifyMode": "center",
+        "textMode": "value",
+        "justifyMode": "auto",
         "orientation": "vertical",
         "text": {
-          "valueSize": 26,
-          "titleSize": 12
-        }
+          "valueSize": 36
+        },
+        "wideLayout": true
       },
       "id": 5,
       "gridPos": {
         "x": 18,
-        "y": 1,
+        "y": 3,
         "w": 6,
-        "h": 6
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "type": "row",
-      "title": "What waiting has cost so far",
-      "collapsed": false,
-      "panels": [],
-      "id": 6,
-      "gridPos": {
-        "x": 0,
-        "y": 7,
-        "w": 24,
-        "h": 1
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -637,16 +401,123 @@
     },
     {
       "type": "timeseries",
-      "title": "Failed user requests, adding up",
-      "description": "Every failed request since the start of the selected time range. The red line only climbs. The violet line is how many failures the same traffic would have had at the configured target success rate.",
+      "title": "Traffic by method",
+      "description": "RPC calls per second in the selected range. Batch members count separately.",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(increase(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\", outcome=~\"http_error|rate_limited|rpc_error|timeout|network\"}[$__interval])) or (0 * sum(increase(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}[$__interval])))",
-          "legendFormat": "failed",
+          "expr": "sum by (method) (rate(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}[$__rate_interval]))",
+          "legendFormat": "{{method}}",
+          "refId": "A",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "transformations": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 13,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "eth_call"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8eaff5"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "eth_blockNumber"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#b9a4ff"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "eth_getLogs"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#efb97c"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 6,
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 14,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Response latency \u00b7 p95",
+      "description": "Client-observed HTTP duration per provider. A batch has one duration. The dashed line is the configured target.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, provider) (rate(rpc_xray_request_duration_seconds_bucket{chain=~\"$chain\", provider=~\"$provider\"}[$__rate_interval])))",
+          "legendFormat": "{{provider}}",
           "refId": "A",
           "instant": false,
           "range": true
@@ -656,70 +527,29 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(increase(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}[$__interval])) * (1 - $target_success)",
-          "legendFormat": "target",
+          "expr": "vector($target_p95) and on () count(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"})",
+          "legendFormat": "Target",
           "refId": "B",
           "instant": false,
           "range": true
         }
       ],
-      "transformations": [
-        {
-          "id": "joinByField",
-          "options": {
-            "byField": "Time",
-            "mode": "outer"
-          }
-        },
-        {
-          "id": "calculateField",
-          "options": {
-            "mode": "cumulativeFunctions",
-            "cumulative": {
-              "field": "failed",
-              "reducer": "sum"
-            },
-            "alias": "Failed user requests",
-            "replaceFields": false
-          }
-        },
-        {
-          "id": "calculateField",
-          "options": {
-            "mode": "cumulativeFunctions",
-            "cumulative": {
-              "field": "target",
-              "reducer": "sum"
-            },
-            "alias": "Configured target",
-            "replaceFields": false
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "failed": true,
-              "target": true
-            }
-          }
-        }
-      ],
+      "transformations": [],
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
+          "unit": "s",
           "custom": {
             "drawStyle": "line",
             "lineWidth": 2,
-            "fillOpacity": 18,
+            "fillOpacity": 9,
             "showPoints": "never",
-            "spanNulls": true,
+            "spanNulls": false,
             "stacking": {
               "mode": "none"
             }
           },
           "color": {
-            "mode": "palette-classic"
+            "mode": "palette-classic-by-name"
           },
           "min": 0
         },
@@ -727,29 +557,14 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Failed user requests"
+              "options": "Target"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#e5484d"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Configured target"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#7c3aed"
+                  "fixedColor": "#747c89"
                 }
               },
               {
@@ -781,13 +596,29 @@
           "sort": "desc"
         }
       },
-      "interval": "1m",
       "id": 7,
       "gridPos": {
+        "x": 14,
+        "y": 7,
+        "w": 10,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "row",
+      "title": "Incidents and chain head",
+      "collapsed": false,
+      "panels": [],
+      "id": 8,
+      "gridPos": {
         "x": 0,
-        "y": 8,
-        "w": 14,
-        "h": 9
+        "y": 15,
+        "w": 24,
+        "h": 1
       },
       "datasource": {
         "type": "prometheus",
@@ -796,16 +627,16 @@
     },
     {
       "type": "stat",
-      "title": "Failed user requests",
-      "description": "Requests in the selected time range that returned an HTTP error, were rate limited, timed out, never connected, or came back with a provider error at HTTP 200.",
+      "title": "Firing incidents",
+      "description": "Firing incident rules matching the selected chain and provider.",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "(sum(increase(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\", outcome=~\"http_error|rate_limited|rpc_error|timeout|network\"}[$__range])) or (0 * sum(increase(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}[$__range]))))",
-          "legendFormat": "Failed",
+          "expr": "count(ALERTS{alertstate=\"firing\", rpc_xray=\"incident\", chain=~\"$chain\", provider=~\"$provider\"}) or (0 * (count(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}) and on () rpc_xray:incident_any))",
+          "legendFormat": "Firing incidents",
           "refId": "A",
           "instant": true,
           "range": false
@@ -816,193 +647,102 @@
           "unit": "short",
           "color": {
             "mode": "fixed",
-            "fixedColor": "#e5484d"
-          },
-          "mappings": [],
-          "decimals": 0,
-          "noValue": "No data"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Failed"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "thresholds"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "#30a46c",
-                      "value": null
-                    },
-                    {
-                      "color": "#e5484d",
-                      "value": 1e-06
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value_and_name",
-        "justifyMode": "center",
-        "orientation": "vertical",
-        "text": {
-          "valueSize": 26,
-          "titleSize": 12
-        }
-      },
-      "id": 8,
-      "gridPos": {
-        "x": 14,
-        "y": 8,
-        "w": 5,
-        "h": 3
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Time users waited beyond 1 s",
-      "description": "Total waiting time above one second per request in the selected time range.",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "sum(increase(rpc_xray_slow_seconds_total{chain=~\"$chain\", provider=~\"$provider\"}[$__range])) or (0 * sum(increase(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}[$__range])))",
-          "legendFormat": "Waited",
-          "refId": "A",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#e5484d"
-          },
-          "mappings": [],
-          "decimals": 0,
-          "noValue": "No data"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Waited"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "thresholds"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "#30a46c",
-                      "value": null
-                    },
-                    {
-                      "color": "#e5484d",
-                      "value": 1e-06
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value_and_name",
-        "justifyMode": "center",
-        "orientation": "vertical",
-        "text": {
-          "valueSize": 26,
-          "titleSize": 12
-        }
-      },
-      "id": 9,
-      "gridPos": {
-        "x": 19,
-        "y": 8,
-        "w": 5,
-        "h": 3
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Estimated loss",
-      "description": "Failed requests multiplied by the value of one request. Shown only when valuePerRequest is set in rpc-xray.",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "((sum(increase(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\", outcome=~\"http_error|rate_limited|rpc_error|timeout|network\"}[$__range])) or (0 * sum(increase(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}[$__range]))))) * on () max(rpc_xray_value_per_request_usd)",
-          "legendFormat": "Lost",
-          "refId": "A",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "currencyUSD",
-          "color": {
-            "mode": "fixed",
             "fixedColor": "#747c89"
           },
           "mappings": [],
           "decimals": 0,
-          "noValue": "Not configured"
+          "noValue": "Unmeasured"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Firing incidents"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "#30a46c",
+                      "value": null
+                    },
+                    {
+                      "color": "#e5484d",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "vertical",
+        "text": {
+          "valueSize": 36
+        },
+        "wideLayout": true
+      },
+      "id": 9,
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Pending incidents",
+      "description": "Rules waiting for their configured hold time.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "count(ALERTS{alertstate=\"pending\", rpc_xray=\"incident\", chain=~\"$chain\", provider=~\"$provider\"}) or (0 * (count(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}) and on () rpc_xray:incident_any))",
+          "legendFormat": "Pending incidents",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#c4cbd6"
+          },
+          "mappings": [],
+          "decimals": 0,
+          "noValue": "Unmeasured"
         },
         "overrides": []
       },
@@ -1016,20 +756,20 @@
         },
         "colorMode": "value",
         "graphMode": "none",
-        "textMode": "value_and_name",
-        "justifyMode": "center",
+        "textMode": "value",
+        "justifyMode": "auto",
         "orientation": "vertical",
         "text": {
-          "valueSize": 26,
-          "titleSize": 12
-        }
+          "valueSize": 36
+        },
+        "wideLayout": true
       },
       "id": 10,
       "gridPos": {
-        "x": 14,
-        "y": 11,
-        "w": 5,
-        "h": 3
+        "x": 6,
+        "y": 16,
+        "w": 6,
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -1038,8 +778,657 @@
     },
     {
       "type": "stat",
-      "title": "Failures this week against last week",
-      "description": "Failed requests in the last 7 days and in the 7 days before that.",
+      "title": "Time since head advanced",
+      "description": "Age of the oldest last advance among measured providers. Requires a recent head observation.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max(time() - rpc_xray_head_last_advance_timestamp_seconds{chain=~\"$chain\", provider=~\"$provider\"})",
+          "legendFormat": "Time since head advanced",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#a9cddd"
+          },
+          "mappings": [],
+          "decimals": 0,
+          "noValue": "Head unmeasured"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "vertical",
+        "text": {
+          "valueSize": 36
+        },
+        "wideLayout": true
+      },
+      "id": 11,
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Head lag \u00b7 blocks",
+      "description": "Blocks behind a peer on the same chain. Two measured providers on one chain in the same registry are required.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max(rpc_xray_head_lag_blocks{chain=~\"$chain\", provider=~\"$provider\"} and on(job,instance,chain) (count by(job,instance,chain)(max by(job,instance,chain,provider)(rpc_xray_head_block)) > 1))",
+          "legendFormat": "Head lag \u00b7 blocks",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#a9cddd"
+          },
+          "mappings": [],
+          "decimals": 0,
+          "noValue": "Needs two heads"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "vertical",
+        "text": {
+          "valueSize": 36
+        },
+        "wideLayout": true
+      },
+      "id": 12,
+      "gridPos": {
+        "x": 18,
+        "y": 16,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "state-timeline",
+      "title": "Incident history",
+      "description": "Each row is a firing incident for the selected providers. A blank period means telemetry was absent or the rule was inactive.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max by (alertname, chain, provider) (ALERTS{alertstate=\"firing\", rpc_xray=\"incident\", chain=~\"$chain\", provider=~\"$provider\"}) or on () label_replace(0 * (count(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}) and on () rpc_xray:incident_any), \"alertname\", \"No firing incidents\", \"__name__\", \".*\")",
+          "legendFormat": "{{alertname}}  {{provider}}",
+          "refId": "A",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 75,
+            "lineWidth": 0,
+            "spanNulls": false
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Quiet",
+                  "color": "#394652"
+                },
+                "1": {
+                  "text": "Firing",
+                  "color": "#e5484d"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "never",
+        "rowHeight": 0.75,
+        "mergeValues": true,
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "id": 13,
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 14,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Observed errors by outcome",
+      "description": "Current counters from the selected running exporters. Includes the first observation. Each exporter restarts its counters at zero. The time picker sets the evaluation endpoint.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (outcome) (rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\",outcome!=\"ok\"}) or on () label_replace(0 * sum(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}), \"outcome\", \"No errors\", \"__name__\", \".*\")",
+          "legendFormat": "{{outcome}}",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#b9a4ff"
+          },
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "caller_error"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#97b4cf"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "No errors"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#747c89"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "displayMode": "basic",
+        "orientation": "horizontal",
+        "showUnfilled": false,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "text": {
+          "valueSize": 18,
+          "titleSize": 13
+        },
+        "valueMode": "text"
+      },
+      "id": 14,
+      "gridPos": {
+        "x": 14,
+        "y": 20,
+        "w": 10,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "row",
+      "title": "Service targets and impact",
+      "collapsed": false,
+      "panels": [],
+      "id": 15,
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 24,
+        "h": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Provider success over time",
+      "description": "Rolling provider success. New low-volume series can be absent from rate estimates until two scrapes. The overview gives observed counters.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "rpc_xray:success_ratio:rate1h{chain=~\"$chain\", provider=~\"$provider\"}",
+          "legendFormat": "{{provider}}",
+          "refId": "A",
+          "instant": false,
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "vector($target_success) and on () count(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"})",
+          "legendFormat": "Target",
+          "refId": "B",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "transformations": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 6,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "max": 1
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Target"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#747c89"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 16,
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Provider failures over time",
+      "description": "Estimated provider failures per second. Refer to observed errors for first events.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (outcome) (rate(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\", outcome=~\"http_error|rate_limited|rpc_error|timeout|network\"}[$__rate_interval])) or on () label_replace(0 * sum(rate(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}[$__rate_interval])), \"outcome\", \"No failures\", \"__name__\", \".*\")",
+          "legendFormat": "{{outcome}}",
+          "refId": "A",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "transformations": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 13,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 17,
+      "gridPos": {
+        "x": 12,
+        "y": 28,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Excess wait \u00b7 selected range",
+      "description": "Estimated cumulative time spent above one second per exchange.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(increase(rpc_xray_slow_seconds_total{chain=~\"$chain\", provider=~\"$provider\"}[$__range])) or (0 * sum(increase(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}[$__range])))",
+          "legendFormat": "Excess wait \u00b7 selected range",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#a9cddd"
+          },
+          "mappings": [],
+          "decimals": 1,
+          "noValue": "Unmeasured"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "vertical",
+        "text": {
+          "valueSize": 36
+        },
+        "wideLayout": true
+      },
+      "id": 18,
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 8,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Estimated loss \u00b7 selected range",
+      "description": "Estimated failures multiplied by each reporting instance\u2019s configured value per request. Only configured instances contribute.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum((sum by(job,instance)(increase(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\", outcome=~\"http_error|rate_limited|rpc_error|timeout|network\"}[$__range])) or (0 * sum by(job,instance)(increase(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}[$__range])))) * on(job,instance) rpc_xray_value_per_request_usd)",
+          "legendFormat": "Estimated loss \u00b7 selected range",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#c4cbd6"
+          },
+          "mappings": [],
+          "decimals": 2,
+          "noValue": "Value unset"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "vertical",
+        "text": {
+          "valueSize": 36
+        },
+        "wideLayout": true
+      },
+      "id": 19,
+      "gridPos": {
+        "x": 8,
+        "y": 35,
+        "w": 8,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Response latency \u00b7 range p95",
+      "description": "95th percentile across selected HTTP exchanges during the dashboard time range.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (increase(rpc_xray_request_duration_seconds_bucket{chain=~\"$chain\", provider=~\"$provider\"}[$__range])))",
+          "legendFormat": "Response latency \u00b7 range p95",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#b9a4ff"
+          },
+          "mappings": [],
+          "decimals": 2,
+          "noValue": "No timed traffic"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "vertical",
+        "text": {
+          "valueSize": 36
+        },
+        "wideLayout": true
+      },
+      "id": 20,
+      "gridPos": {
+        "x": 16,
+        "y": 35,
+        "w": 8,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "row",
+      "title": "Fleet history and offer",
+      "collapsed": false,
+      "panels": [],
+      "id": 21,
+      "gridPos": {
+        "x": 0,
+        "y": 39,
+        "w": 24,
+        "h": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Weekly failures \u00b7 all providers",
+      "description": "Fleet estimates from five-minute samples. This week includes available samples. Showing the previous week or forecasting requires at least 99% of its five-minute samples.",
       "targets": [
         {
           "datasource": {
@@ -1057,8 +1446,8 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum_over_time(rpc_xray:failed_requests:rate5m_total[7d] offset 7d) * 300",
-          "legendFormat": "Last week",
+          "expr": "(sum_over_time(rpc_xray:failed_requests:rate5m_total[7d] offset 7d) * 300) and (count_over_time(rpc_xray:failed_requests:rate5m_total[7d] offset 7d) >= 1996)",
+          "legendFormat": "Previous week",
           "refId": "B",
           "instant": true,
           "range": false
@@ -1069,94 +1458,7 @@
           "unit": "short",
           "color": {
             "mode": "fixed",
-            "fixedColor": "#747c89"
-          },
-          "mappings": [],
-          "decimals": 0,
-          "noValue": "Collecting history"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Last week"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#f5a524"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value_and_name",
-        "justifyMode": "center",
-        "orientation": "vertical",
-        "text": {
-          "valueSize": 26,
-          "titleSize": 12
-        }
-      },
-      "id": 11,
-      "gridPos": {
-        "x": 19,
-        "y": 11,
-        "w": 5,
-        "h": 3
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "type": "stat",
-      "title": "If nothing changes: next 30 and 90 days",
-      "description": "A straight-line projection from the last 7 days. This is how many more user requests fail if the RPC setup stays as it is.",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "sum_over_time(rpc_xray:failed_requests:rate5m_total[7d]) * 300 * 30 / 7",
-          "legendFormat": "Next 30 days",
-          "refId": "A",
-          "instant": true,
-          "range": false
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "sum_over_time(rpc_xray:failed_requests:rate5m_total[7d]) * 300 * 90 / 7",
-          "legendFormat": "Next 90 days",
-          "refId": "B",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#747c89"
+            "fixedColor": "#c4cbd6"
           },
           "mappings": [],
           "decimals": 0,
@@ -1175,105 +1477,19 @@
         "colorMode": "value",
         "graphMode": "none",
         "textMode": "value_and_name",
-        "justifyMode": "center",
+        "justifyMode": "auto",
         "orientation": "vertical",
         "text": {
-          "valueSize": 26,
-          "titleSize": 12
-        }
+          "valueSize": 36
+        },
+        "wideLayout": true
       },
-      "id": 12,
-      "gridPos": {
-        "x": 14,
-        "y": 14,
-        "w": 10,
-        "h": 3
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "type": "row",
-      "title": "Incidents",
-      "collapsed": false,
-      "panels": [],
-      "id": 13,
+      "id": 22,
       "gridPos": {
         "x": 0,
-        "y": 17,
-        "w": 24,
-        "h": 1
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "type": "state-timeline",
-      "title": "Open incidents",
-      "description": "Firing alert rules over time. No open incidents is an alert state, not proof that traffic or head measurements are available.",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "max by (alertname, chain, provider) (ALERTS{alertstate=\"firing\", rpc_xray=\"incident\", chain=~\"$chain\", provider=~\"$provider\"}) or on () label_replace(vector(0), \"alertname\", \"No open incidents\", \"__name__\", \".*\")",
-          "legendFormat": "{{alertname}} {{chain}} {{provider}}",
-          "refId": "A",
-          "instant": false,
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#e5484d"
-          },
-          "custom": {
-            "fillOpacity": 85,
-            "lineWidth": 0,
-            "spanNulls": false
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "No open incidents",
-                  "color": "#747c89"
-                },
-                "1": {
-                  "text": "Open",
-                  "color": "#e5484d"
-                }
-              }
-            }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "showValue": "never",
-        "mergeValues": true,
-        "rowHeight": 0.8,
-        "legend": {
-          "showLegend": false
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "id": 14,
-      "gridPos": {
-        "x": 0,
-        "y": 18,
-        "w": 16,
-        "h": 7
+        "y": 40,
+        "w": 8,
+        "h": 5
       },
       "datasource": {
         "type": "prometheus",
@@ -1282,15 +1498,146 @@
     },
     {
       "type": "stat",
-      "title": "SolidRPC offer",
-      "description": "Shown when you send about 100M requests a month and had at least one incident in the last 7 days. Set offers: false in rpc-xray to turn it off.",
+      "title": "Projected failures \u00b7 all providers",
+      "description": "Estimated failures in 30 and 90 days at the observed weekly rate.",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max(ALERTS{alertname=\"RpcXrayTrialOffer\", alertstate=\"firing\"})",
+          "expr": "((sum_over_time(rpc_xray:failed_requests:rate5m_total[7d]) * 300) and (count_over_time(rpc_xray:failed_requests:rate5m_total[7d]) >= 1996)) * 30 / 7",
+          "legendFormat": "30 days",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "((sum_over_time(rpc_xray:failed_requests:rate5m_total[7d]) * 300) and (count_over_time(rpc_xray:failed_requests:rate5m_total[7d]) >= 1996)) * 90 / 7",
+          "legendFormat": "90 days",
+          "refId": "B",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#c4cbd6"
+          },
+          "mappings": [],
+          "decimals": 0,
+          "noValue": "Collecting history"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "auto",
+        "orientation": "vertical",
+        "text": {
+          "valueSize": 36
+        },
+        "wideLayout": true
+      },
+      "id": 23,
+      "gridPos": {
+        "x": 8,
+        "y": 40,
+        "w": 8,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Incident minutes \u00b7 fleet / 7d",
+      "description": "Fleet-wide time with a firing incident, in five-minute samples.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "rpc_xray:incident_minutes:7d",
+          "legendFormat": "Incident minutes \u00b7 fleet / 7d",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "m",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#c4cbd6"
+          },
+          "mappings": [],
+          "decimals": 0,
+          "noValue": "Collecting history"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "vertical",
+        "text": {
+          "valueSize": 36
+        },
+        "wideLayout": true
+      },
+      "id": 24,
+      "gridPos": {
+        "x": 16,
+        "y": 40,
+        "w": 8,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "SolidRPC offer \u00b7 fleet",
+      "description": "Eligible at 100M projected monthly requests with a recent incident and offers enabled. Select the active offer to email SolidRPC.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max(ALERTS{alertname=\"RpcXrayTrialOffer\",alertstate=\"firing\"}) and on () (max(rpc_xray_offers_enabled) == 1)",
           "legendFormat": "Offer",
           "refId": "A",
           "instant": true,
@@ -1302,38 +1649,28 @@
           "unit": "none",
           "color": {
             "mode": "fixed",
-            "fixedColor": "#747c89"
+            "fixedColor": "#b9a4ff"
           },
           "mappings": [
             {
               "type": "value",
               "options": {
                 "1": {
-                  "text": "14-day free trial or $100 credit. Email hello@solidrpc.io",
-                  "color": "#7c3aed"
+                  "text": "14-day trial or $100 credit  \u00b7  hello@solidrpc.io",
+                  "color": "#b9a4ff"
                 }
               }
             }
           ],
-          "noValue": "No active offer"
+          "noValue": "No active offer",
+          "links": [
+            {
+              "title": "Request the RPC X-Ray offer",
+              "url": "mailto:hello@solidrpc.io?subject=RPC%20X-Ray%20offer"
+            }
+          ]
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Offer"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#7c3aed"
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "options": {
         "reduceOptions": {
@@ -1345,505 +1682,20 @@
         },
         "colorMode": "value",
         "graphMode": "none",
-        "textMode": "value_and_name",
-        "justifyMode": "center",
+        "textMode": "value",
+        "justifyMode": "auto",
         "orientation": "vertical",
         "text": {
-          "valueSize": 26,
-          "titleSize": 12
-        }
+          "valueSize": 22
+        },
+        "wideLayout": true
       },
-      "id": 15,
-      "gridPos": {
-        "x": 16,
-        "y": 18,
-        "w": 8,
-        "h": 7
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "type": "row",
-      "title": "By provider",
-      "collapsed": false,
-      "panels": [],
-      "id": 16,
+      "id": 25,
       "gridPos": {
         "x": 0,
-        "y": 25,
+        "y": 45,
         "w": 24,
-        "h": 1
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Success rate by provider",
-      "description": "Hourly success rate per endpoint, against the target.",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "rpc_xray:success_ratio:rate1h{chain=~\"$chain\", provider=~\"$provider\"}",
-          "legendFormat": "{{chain}} {{provider}}",
-          "refId": "A",
-          "instant": false,
-          "range": true
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "vector($target_success)",
-          "legendFormat": "Configured target",
-          "refId": "B",
-          "instant": false,
-          "range": true
-        }
-      ],
-      "transformations": [],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "showPoints": "never",
-            "spanNulls": true,
-            "stacking": {
-              "mode": "none"
-            }
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "max": 1
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Configured target"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#7c3aed"
-                }
-              },
-              {
-                "id": "custom.lineStyle",
-                "value": {
-                  "fill": "dash",
-                  "dash": [
-                    8,
-                    6
-                  ]
-                }
-              },
-              {
-                "id": "custom.fillOpacity",
-                "value": 0
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "id": 17,
-      "gridPos": {
-        "x": 0,
-        "y": 26,
-        "w": 12,
-        "h": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "p95 latency by provider",
-      "description": "The dashed red line is the 1 second incident threshold. The violet line is the configured target.",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "rpc_xray:latency_seconds:p95_1m{chain=~\"$chain\", provider=~\"$provider\"}",
-          "legendFormat": "{{chain}} {{provider}}",
-          "refId": "A",
-          "instant": false,
-          "range": true
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "vector(1)",
-          "legendFormat": "Incident threshold",
-          "refId": "B",
-          "instant": false,
-          "range": true
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "vector($target_p95)",
-          "legendFormat": "Configured target",
-          "refId": "C",
-          "instant": false,
-          "range": true
-        }
-      ],
-      "transformations": [],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "showPoints": "never",
-            "spanNulls": true,
-            "stacking": {
-              "mode": "none"
-            }
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "min": 0
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Incident threshold"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#e5484d"
-                }
-              },
-              {
-                "id": "custom.lineStyle",
-                "value": {
-                  "fill": "dash",
-                  "dash": [
-                    8,
-                    6
-                  ]
-                }
-              },
-              {
-                "id": "custom.fillOpacity",
-                "value": 0
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Configured target"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#7c3aed"
-                }
-              },
-              {
-                "id": "custom.lineStyle",
-                "value": {
-                  "fill": "dash",
-                  "dash": [
-                    8,
-                    6
-                  ]
-                }
-              },
-              {
-                "id": "custom.fillOpacity",
-                "value": 0
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "id": 18,
-      "gridPos": {
-        "x": 12,
-        "y": 26,
-        "w": 12,
-        "h": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Failed requests per second, by kind",
-      "description": "What kind of failure your users hit.",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "sum by (outcome) (rate(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\", outcome=~\"http_error|rate_limited|rpc_error|timeout|network\"}[5m])) or on () label_replace(0 * sum(rate(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}[5m])), \"outcome\", \"No failures\", \"__name__\", \".*\")",
-          "legendFormat": "{{outcome}}",
-          "refId": "A",
-          "instant": false,
-          "range": true
-        }
-      ],
-      "transformations": [],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 2,
-            "fillOpacity": 30,
-            "showPoints": "never",
-            "spanNulls": true,
-            "stacking": {
-              "mode": "normal"
-            }
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "id": 19,
-      "gridPos": {
-        "x": 0,
-        "y": 34,
-        "w": 12,
-        "h": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Seconds since the last new block",
-      "description": "A rising line means no new block has been observed. Requires head probes. No data means unmeasured, including when probeIntervalSeconds is 0. The dashed line is the 3 minute incident threshold.",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "rpc_xray:head_stale_seconds{chain=~\"$chain\", provider=~\"$provider\"}",
-          "legendFormat": "{{chain}} {{provider}}",
-          "refId": "A",
-          "instant": false,
-          "range": true
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "vector(180) and on () rpc_xray:head_stale_seconds{chain=~\"$chain\", provider=~\"$provider\"}",
-          "legendFormat": "Incident threshold",
-          "refId": "B",
-          "instant": false,
-          "range": true
-        }
-      ],
-      "transformations": [],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "showPoints": "never",
-            "spanNulls": true,
-            "stacking": {
-              "mode": "none"
-            }
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "min": 0
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Incident threshold"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#e5484d"
-                }
-              },
-              {
-                "id": "custom.lineStyle",
-                "value": {
-                  "fill": "dash",
-                  "dash": [
-                    8,
-                    6
-                  ]
-                }
-              },
-              {
-                "id": "custom.fillOpacity",
-                "value": 0
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "id": 20,
-      "gridPos": {
-        "x": 12,
-        "y": 34,
-        "w": 12,
-        "h": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Requests per second by method",
-      "description": "Your real traffic, by JSON-RPC method.",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "sum by (method) (rate(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}[5m]))",
-          "legendFormat": "{{method}}",
-          "refId": "A",
-          "instant": false,
-          "range": true
-        }
-      ],
-      "transformations": [],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 2,
-            "fillOpacity": 20,
-            "showPoints": "never",
-            "spanNulls": true,
-            "stacking": {
-              "mode": "normal"
-            }
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "id": 21,
-      "gridPos": {
-        "x": 0,
-        "y": 42,
-        "w": 24,
-        "h": 8
+        "h": 3
       },
       "datasource": {
         "type": "prometheus",

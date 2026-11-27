@@ -93,7 +93,7 @@ const telemetry = new Xray({ probeIntervalSeconds: 0, offers: false });
 const rpcFetch = telemetry.wrap(fetch, { chain: "ethereum" });
 ```
 
-Supply the correct chain for every endpoint. Setting only `probeIntervalSeconds: 0` still permits `eth_chainId` detection. With explicit chains and probes off, request and latency metrics remain available, while head freshness and lag are unmeasured. Scraping metrics never makes an RPC call. Call `telemetry.close()` during shutdown to clear its timers. Your app remains responsible for cancelling its requests and stopping its HTTP server.
+Supply the correct chain for every endpoint. Setting only `probeIntervalSeconds: 0` still permits `eth_chainId` detection. With explicit chains and probes off, request and latency metrics remain available, and the wrapper measures head freshness from successful `eth_blockNumber` or `eth_getBlockByNumber("latest", …)` responses matched by ID. Passive head observations expire after 120 seconds. Scraping metrics never makes an RPC call. Call `telemetry.close()` during shutdown to clear its timers. Your app remains responsible for cancelling its requests and stopping its HTTP server.
 
 With defaults, each discovered endpoint receives up to three chain-detection calls and an immediate head probe, followed by a head probe every 15 seconds. Options other than `chain` apply to the entire registry, so configure them consistently across wrappers. A provider label is the endpoint host, including a non-default port. Distinct paths on the same host and chain share metric labels.
 

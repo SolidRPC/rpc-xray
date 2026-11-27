@@ -407,3 +407,11 @@ def test_offer_logger_failure_is_swallowed():
     xray._total, xray._failed = 39_999_999, 5_000_000
     xray.start("https://rpc.example", "ethereum", REQUEST).finish(200, OK)
     assert xray._offered
+
+
+def test_passive_latest_block_batch():
+    request = b'[{"method":"eth_getBlockByNumber","params":["latest",false],"id":1},{"method":"eth_getBlockByNumber","params":["safe",false],"id":2},{"method":"eth_getBlockByNumber","params":["latest",false],"id":3}]'
+    response = b'[{"id":2,"result":{"number":"0xffff"}},{"id":1,"result":{"number":"0x29"}},{"id":3,"result":{"number":"wrong"}},{"id":9,"result":{"number":"0xff"}}]'
+    xray = Xray()
+    xray.start("https://rpc.example", "ethereum", request).finish(200, response)
+    assert gauge(xray, "rpc_xray_head_block") == 41

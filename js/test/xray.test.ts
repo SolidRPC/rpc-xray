@@ -291,3 +291,40 @@ test(
     instance.close();
   },
 );
+
+test("passive head uses only a matching latest block without extra calls", async (t) => {
+  const telemetry = new Xray({ probeIntervalSeconds: 0 });
+  let calls = 0;
+  const send = telemetry.wrap(
+    async (_url: string, _init?: RequestInit) => {
+      calls++;
+      return new Response(
+        JSON.stringify([
+          { id: 2, result: { number: "0xffff" } },
+          { id: 1, result: { number: "0x29" } },
+          { id: 3, result: { number: "wrong" } },
+          { id: 9, result: { number: "0xff" } },
+        ]),
+      );
+    },
+    { chain: "ethereum" },
+  );
+  try {
+    const body = JSON.stringify(
+      ["latest", "safe", "latest"].map((tag, i) => ({
+        method: "eth_getBlockByNumber",
+        params: [tag, false],
+        id: i + 1,
+      })),
+    );
+    await send("http://rpc.example", { method: "POST", body });
+    const text = await until(() => telemetry.metrics(), /rpc_xray_head_block\{[^}]+\} 41/);
+    const expired = Date.now() + 121_000;
+    t.mock.method(Date, "now", () => expired);
+    assert.doesNotMatch(telemetry.metrics(), /rpc_xray_head_block\{/);
+    assert.equal(calls, 1);
+    assert.doesNotMatch(text, /rpc_xray_probe_requests_total\{/);
+  } finally {
+    telemetry.close();
+  }
+});

@@ -4,6 +4,7 @@ import {
   classifyResponse,
   parseRequest,
   type Entry,
+  passiveHead,
   type ParsedRequest,
 } from "./classify.js";
 import { Registry, type GaugeSample } from "./registry.js";
@@ -47,6 +48,7 @@ interface Endpoint {
   chain: string | undefined;
   pending: Pending[];
   head: number | undefined;
+  observedAt?: number;
   lastAdvance: number | undefined;
   headers: unknown;
   fetchImpl: FetchLike;
@@ -334,10 +336,7 @@ export class Xray {
     try {
       const head = (await this.call(endpoint, "eth_blockNumber")) as number;
       if (!Number.isFinite(head)) throw new Error("bad head");
-      if (endpoint.head === undefined || head > endpoint.head) {
-        endpoint.lastAdvance = Date.now();
-      }
-      endpoint.head = head;
+      this.observeHead(endpoint, head);
       this.registry.inc("rpc_xray_probe_requests_total", "Head probe calls by result.", {
         ...labels,
         result: "ok",
@@ -354,6 +353,15 @@ export class Xray {
     ) {
       this.staleSeen = true;
     }
+  }
+
+  private observeHead(endpoint: Endpoint, head: number): void {
+    const now = Date.now();
+    if (endpoint.head === undefined || head > endpoint.head) endpoint.lastAdvance = now;
+    endpoint.head = head;
+    endpoint.observedAt = now;
+    if (endpoint.lastAdvance !== undefined && now - endpoint.lastAdvance > STALE_SECONDS * 1000)
+      this.staleSeen = true;
   }
 
   private onFailure(context: Context, error: unknown, started: number): void {
@@ -378,6 +386,10 @@ export class Xray {
     readCapped(copy, cap).then(
       (text) => {
         try {
+          if (this.options.probeIntervalSeconds === 0) {
+            const head = passiveHead(context.request, text);
+            if (head !== undefined) this.observeHead(context.endpoint, head);
+          }
           this.finish(context, classifyResponse(context.request, status, text), started);
         } catch {
           return;
@@ -457,9 +469,14 @@ export class Xray {
   private gauges(): GaugeSample[] {
     const now = Date.now();
     const best = new Map<string, number>();
-    const known = [...this.endpoints.values()].filter(
-      (endpoint) => endpoint.chain !== undefined && endpoint.head !== undefined,
-    );
+    const latest = new Map<string, Endpoint>();
+    for (const endpoint of this.endpoints.values()) {
+      if (endpoint.chain === undefined || endpoint.observedAt === undefined) continue;
+      if (this.options.probeIntervalSeconds === 0 && now - endpoint.observedAt > 120_000) continue;
+      const key = JSON.stringify([endpoint.chain, endpoint.provider]);
+      if ((latest.get(key)?.observedAt ?? 0) <= endpoint.observedAt) latest.set(key, endpoint);
+    }
+    const known = [...latest.values()];
     for (const endpoint of known) {
       const chain = endpoint.chain as string;
       best.set(chain, Math.max(best.get(chain) ?? 0, endpoint.head as number));

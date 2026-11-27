@@ -49,7 +49,7 @@ All four SDKs use the same metric names, labels, histogram buckets, and error cl
 
 Each SDK README leads with its intended package install command and includes local package instructions for unreleased versions. Every example has `/metrics`, shutdown handling, and a matching Prometheus config. Run one example at a time on the default port 9464, or assign separate ports and scrape targets.
 
-Python, Go, and Rust add no RPC calls of their own. They read the chain head from the `eth_blockNumber` answers your application already receives, so a stale or lagging provider shows up as soon as your app polls the head. Supply a chain label explicitly. If your app never calls `eth_blockNumber`, record a separate probe with `record_probe` or `RecordProbe`. JavaScript detects chains and probes heads itself, described below.
+Python, Go, and Rust add no RPC calls of their own. They read the chain head from successful `eth_blockNumber` and `eth_getBlockByNumber("latest", …)` responses your application already receives, so a stale or lagging provider shows up as soon as your app polls the head. Supply a chain label explicitly. If your app never reads the latest head, record a separate probe with `record_probe` or `RecordProbe`. JavaScript detects chains and probes heads itself, described below.
 
 ## Add it with a coding agent
 
@@ -68,10 +68,10 @@ Integrate RPC X-Ray using https://github.com/SolidRPC/rpc-xray.
    explicit reqwest response wrapper. Keep credentials out of code and logs.
 4. Respect the application's request budget. In JavaScript, to add zero RPC calls, set
    probeIntervalSeconds: 0 AND supply the correct chain for every endpoint.
-   Explain that head freshness and lag are then unmeasured. Otherwise document
+   Use existing latest-head reads for freshness. Otherwise document
    the eth_chainId detection calls and eth_blockNumber probe overhead.
    Python, Go, and Rust add no RPC calls and require explicit chain labels.
-   They measure head freshness from the app's own eth_blockNumber answers.
+   They measure head freshness from the app’s own eth_blockNumber and latest-block answers.
 5. Expose GET /metrics once per process using the same registry that wraps
    the client. In JavaScript, use serveMetrics for the shared registry or
    export your Xray instance's metrics(). Python and Rust export
@@ -114,6 +114,8 @@ RPC_XRAY_TARGETS=./targets.demo.yml docker compose --profile demo up -d
 
 The demo uses only local mock servers. Its separate target file scrapes `demo:9464` instead of an absent host app. Stop it with `docker compose --profile demo down` before returning to the default app target. Stopping the monitoring stack does not stop your application or its RPC requests.
 
+Open [Prometheus alerts](http://localhost:9090/alerts) to see the five incident rules and the separate offer rule. Expand a rule to inspect its threshold, hold time and provider labels. [Alertmanager](http://localhost:9093) shows the receiver for each firing alert. Slack incident notifications include a recovery message with the duration. The offer has its own receiver and sends only while firing. If you supply your own Alertmanager, retain its notification log for at least the 720-hour offer repeat interval. The bundled stack retains 31 days.
+
 Allow two scrapes plus a recording-rule evaluation for rate panels. Rollups first appear at the next five-minute evaluation. Weekly comparisons need accumulated history. No data is not evidence of a healthy endpoint.
 
 Already running Prometheus? Take the files you need:
@@ -149,17 +151,17 @@ An incident is something a person would have been paged for. Defaults, per chain
 - Error-rate incidents need at least a little traffic, so one failed call on a quiet endpoint does not page anyone.
 - With one endpoint, lag is zero and head age measures staleness. With two or more endpoints on the same chain, lag shows which one is behind.
 
-## What waiting costs
+## Read the dashboard
 
-The dashboard has a row that only goes one way:
+![Local Grafana rehearsal showing traffic, latency, five firing incidents and provider head lag](assets/dashboard.png)
 
-- Failed user requests, adding up since the start of the time range, against the line where the same traffic should be.
-- Total time users waited beyond 1 second.
-- Minutes with an open incident.
-- This week against last week, and a straight-line projection for the next 30 and 90 days.
-- Estimated loss in dollars, shown only if you set `valuePerRequest`. rpc-xray never invents a money figure.
+The overview counts requests from the selected SDK processes at the end of the time range. A failure first scraped at a count of one appears immediately. Counters reset when a process restarts. Provider success includes valid caller rejections, which also appear under **Caller errors**.
 
-The targets on the dashboard are editable at the top: success rate and p95 latency.
+Traffic, latency and failure-rate charts follow the time picker. Prometheus needs at least two scrapes to estimate a rate or increase. The incident history shows when each rule fired. Head freshness needs recent head observations, and peer lag needs two measured providers on one chain in the same registry.
+
+The impact row estimates excess wait and the value of failed calls over the selected range. Set a value per request on each measured instance to include it in the dollar estimate. Edit the success and p95 targets at the top to change the chart reference lines.
+
+The fleet row covers all providers and chains in the selected datasource. It uses five-minute samples for weekly failures, projections, incident minutes and offer eligibility. Weekly comparisons and forecasts need a week of history.
 
 ## What it does to your requests
 
@@ -177,13 +179,13 @@ Python and Go wrap HTTP transports. They return the underlying response while ob
 
 By default, the JavaScript SDK detects each endpoint's chain with `eth_chainId` (up to three attempts) and probes `eth_blockNumber` immediately after discovery, then every 15 seconds, about 173,000 probe requests per 30-day month per endpoint. Change the probe interval with `probeIntervalSeconds`.
 
-For **zero additional RPC calls**, set `probeIntervalSeconds: 0` and supply an explicit `chain` to every wrapper. Disabling probes alone does not disable chain detection. Request counters and latency remain available. Head age and lag are unmeasured, and the dashboard must not be read as reporting zero lag. Scraping `/metrics` itself never triggers RPC calls.
+For **zero additional RPC calls**, set `probeIntervalSeconds: 0` and supply an explicit `chain` to every wrapper. Disabling probes alone does not disable chain detection. Request counters and latency remain available. The wrapper measures head age from matching block-number and latest-block responses while observations remain fresh. The dashboard needs two measured providers on the same chain to show peer lag. Scraping `/metrics` itself never triggers RPC calls.
 
 ## The SolidRPC offer
 
-rpc-xray is built by [SolidRPC](https://solidrpc.io). If you send about 100M requests a month and rpc-xray recorded incidents in the last 7 days, the dashboard, one Slack message and one log line will tell you that SolidRPC offers a 14-day free trial or $100 credit. To take it, email hello@solidrpc.io.
+rpc-xray is built by [SolidRPC](https://solidrpc.io). The fleet offer appears in Grafana when projected monthly volume reaches 100M, at least one incident was recorded in seven days, and at least one exporter has offers enabled. The conditions must hold for one hour. With Slack configured, Alertmanager sends the offer to the selected channel. To claim the 14-day free trial or $100 credit, email hello@solidrpc.io.
 
-The offer is on by default in all four SDKs and checked inside your process. Nothing is sent to us. To turn it off, set `offers: false` in JavaScript and Rust, `offers=False` in Python, or `DisableOffers: true` in Go.
+Each SDK also checks its own traffic and can log the offer once after 24 hours at qualifying volume with failures or a stale head. Set the option on every exporter to disable the fleet offer. Nothing is sent to us. To turn it off, set `offers: false` in JavaScript and Rust, `offers=False` in Python, or `DisableOffers: true` in Go.
 
 ## Configuration
 

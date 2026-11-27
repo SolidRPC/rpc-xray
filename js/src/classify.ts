@@ -11,7 +11,7 @@ export interface Entry {
 
 export interface ParsedRequest {
   batch: boolean;
-  calls: { id: unknown; method: string }[];
+  calls: { id: unknown; method: string; latestBlock?: boolean }[];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -25,16 +25,17 @@ export function parseRequest(body: string): ParsedRequest | undefined {
   } catch {
     return undefined;
   }
-  if (Array.isArray(parsed)) {
-    const calls: ParsedRequest["calls"] = [];
-    for (const item of parsed) {
-      if (!isRecord(item) || typeof item.method !== "string") return undefined;
-      calls.push({ id: item.id, method: methodLabel(item.method) });
-    }
-    return calls.length > 0 ? { batch: true, calls } : undefined;
+  const batch = Array.isArray(parsed);
+  const calls: ParsedRequest["calls"] = [];
+  for (const item of batch ? (parsed as unknown[]) : [parsed]) {
+    if (!isRecord(item) || typeof item.method !== "string") return undefined;
+    const latestBlock =
+      item.method === "eth_getBlockByNumber" &&
+      Array.isArray(item.params) &&
+      item.params[0] === "latest";
+    calls.push({ id: item.id, method: methodLabel(item.method), latestBlock });
   }
-  if (!isRecord(parsed) || typeof parsed.method !== "string") return undefined;
-  return { batch: false, calls: [{ id: parsed.id, method: methodLabel(parsed.method) }] };
+  return calls.length ? { batch, calls } : undefined;
 }
 
 export function classifyRpcError(error: unknown): Outcome {
@@ -96,4 +97,36 @@ export function classifyResponse(
     method: call.method,
     outcome: byId.get(JSON.stringify(call.id ?? null)) ?? "rpc_error",
   }));
+}
+
+export function passiveHead(request: ParsedRequest, body?: string): number | undefined {
+  const ids = new Map(
+    request.calls
+      .filter(
+        (c) =>
+          (c.latestBlock || c.method === "eth_blockNumber") &&
+          (typeof c.id === "string" || Number.isSafeInteger(c.id)),
+      )
+      .map((c) => [c.id, c.latestBlock]),
+  );
+  if (!body || !ids.size) return undefined;
+  let payload: unknown;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    return undefined;
+  }
+  let head: number | undefined;
+  for (const item of Array.isArray(payload) ? payload : [payload]) {
+    if (!isRecord(item) || item.error != null || !ids.has(item.id)) continue;
+    const value = ids.get(item.id)
+      ? isRecord(item.result)
+        ? item.result.number
+        : undefined
+      : item.result;
+    if (typeof value !== "string" || !/^0x[0-9a-fA-F]{1,16}$/.test(value)) continue;
+    const n = Number(value);
+    if (Number.isSafeInteger(n)) head = Math.max(head ?? 0, n);
+  }
+  return head;
 }

@@ -367,3 +367,11 @@ func TestServedHeadRollbackAndRecovery(t *testing.T) {
 		t.Fatalf("recovery metrics: %s", x.Metrics())
 	}
 }
+
+func TestPassiveLatestBlockBatch(t *testing.T) {
+	request := parseRequest([]byte(`[{"method":"eth_getBlockByNumber","params":["latest",false],"id":1},{"method":"eth_getBlockByNumber","params":["safe",false],"id":2},{"method":"eth_getBlockByNumber","params":["latest",false],"id":3}]`))
+	head, ok := headFrom(request, []byte(`[{"id":2,"result":{"number":"0xffff"}},{"id":1,"result":{"number":"0x29"}},{"id":3,"result":{"number":"wrong"}},{"id":9,"result":{"number":"0xff"}}]`))
+	if !ok || head != 41 {
+		t.Fatalf("got head %d, present %t", head, ok)
+	}
+}

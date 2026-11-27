@@ -31,7 +31,7 @@ curl http://localhost:9464/metrics
 
 Expect a JSON block result at `/` and a counter such as `rpc_xray_requests_total{chain="ethereum",...outcome="ok"} 1` at `/metrics` after the first response. Metrics contain the endpoint host, not its path or query string. Errors appear as `status: "error"` at `/` without exposing upstream messages or credentials.
 
-The wrapper uses `probeIntervalSeconds: 0` **and** an explicit `chain`. Together they disable all additional RPC calls from RPC X-Ray. Scraping `/metrics` does not send an RPC request. This app owns its one-second polling timer, skips a tick while a request is pending, applies a 4.5-second timeout, and does not retry. Head freshness and lag metrics are unmeasured in this mode, even though the app itself reads block numbers.
+The wrapper uses `probeIntervalSeconds: 0` **and** an explicit `chain`. Together they disable all additional RPC calls from RPC X-Ray. Scraping `/metrics` does not send an RPC request. This app owns its one-second polling timer, skips a tick while a request is pending, applies a 4.5-second timeout, and does not retry. The app’s block-number responses update head freshness. Comparing lag needs a second provider on the same chain in the registry.
 
 Press **Ctrl+C** to stop the app. Shutdown clears polling, aborts the pending request, closes telemetry timers, and closes the HTTP server.
 

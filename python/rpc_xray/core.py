@@ -54,6 +54,9 @@ def parse_request(body):
             (
                 _id_key(c.get("id")),
                 c["method"] if c["method"] in METHODS else "other",
+                c["method"] == "eth_getBlockByNumber"
+                and isinstance(c.get("params"), list)
+                and c["params"][:1] == ["latest"],
             )
             for c in calls
         ]
@@ -80,7 +83,7 @@ def classify(request, status=200, body=None, failure=None):
         return []
 
     def all_calls(outcome):
-        return [{"method": method, "outcome": outcome} for _, method in request[1]]
+        return [{"method": method, "outcome": outcome} for _, method, _ in request[1]]
 
     if failure:
         return all_calls(failure)
@@ -114,14 +117,17 @@ def classify(request, status=200, body=None, failure=None):
     }
     return [
         {"method": method, "outcome": by_id.get(key, "rpc_error")}
-        for key, method in request[1]
+        for key, method, _ in request[1]
     ]
 
 
 def head_from(request, body):
     if request is None or body is None:
         return None
-    ids = {key for key, method in request[1] if method == "eth_blockNumber"}
+    ids = {
+        key: latest for key, method, latest in request[1]
+        if method == "eth_blockNumber" or latest
+    }
     if not ids:
         return None
     try:
@@ -133,9 +139,12 @@ def head_from(request, body):
     for item in payload if batch else [payload]:
         if not isinstance(item, dict) or item.get("error") is not None:
             continue
-        if item.get("id") is None or _id_key(item["id"]) not in ids:
+        key = _id_key(item.get("id"))
+        if item.get("id") is None or key not in ids:
             continue
         result = item.get("result")
+        if ids[key]:
+            result = result.get("number") if isinstance(result, dict) else None
         if isinstance(result, str) and _HEX.fullmatch(result):
             value = int(result, 16)
             best = value if best is None else max(best, value)

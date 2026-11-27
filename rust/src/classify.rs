@@ -35,6 +35,7 @@ pub struct Entry {
 pub(crate) struct Request {
     pub batch: bool,
     pub calls: Vec<(Value, String)>,
+    head_ids: BTreeMap<String, bool>,
 }
 
 pub(crate) fn parse_request(body: &[u8]) -> Option<Request> {
@@ -49,6 +50,7 @@ pub(crate) fn parse_request(body: &[u8]) -> Option<Request> {
         return None;
     }
     let mut calls = Vec::new();
+    let mut head_ids = BTreeMap::new();
     for item in items {
         let method = item.as_object()?.get("method")?.as_str()?;
         let method = if CONTRACT.methods.iter().any(|known| known == method) {
@@ -56,12 +58,24 @@ pub(crate) fn parse_request(body: &[u8]) -> Option<Request> {
         } else {
             "other"
         };
+        let latest = method == "eth_getBlockByNumber"
+            && item.pointer("/params/0").and_then(Value::as_str) == Some("latest")
+            && item["params"].is_array();
+        if method == "eth_blockNumber" || latest {
+            if let Some(id) = item.get("id").filter(|id| !id.is_null()) {
+                head_ids.insert(id_key(id), latest);
+            }
+        }
         calls.push((
             item.get("id").cloned().unwrap_or(Value::Null),
             method.to_owned(),
         ));
     }
-    Some(Request { batch, calls })
+    Some(Request {
+        batch,
+        calls,
+        head_ids,
+    })
 }
 
 fn rpc_error(error: &Value) -> &'static str {
@@ -185,13 +199,7 @@ fn hex_head(value: Option<&Value>) -> Option<u64> {
 }
 
 pub(crate) fn head_from(request: &Request, body: &[u8]) -> Option<u64> {
-    let ids: Vec<String> = request
-        .calls
-        .iter()
-        .filter(|(_, method)| method == "eth_blockNumber")
-        .map(|(id, _)| id_key(id))
-        .collect();
-    if ids.is_empty() {
+    if request.head_ids.is_empty() {
         return None;
     }
     let payload: Value = serde_json::from_slice(body).ok()?;
@@ -202,17 +210,26 @@ pub(crate) fn head_from(request: &Request, body: &[u8]) -> Option<u64> {
     items
         .iter()
         .filter(|item| item.is_object() && item.get("error").is_none_or(Value::is_null))
-        .filter(|item| {
-            item.get("id")
-                .is_some_and(|id| !id.is_null() && ids.contains(&id_key(id)))
+        .filter_map(|item| {
+            let latest = request.head_ids.get(&id_key(item.get("id")?))?;
+            hex_head(if *latest {
+                item.pointer("/result/number")
+            } else {
+                item.get("result")
+            })
         })
-        .filter_map(|item| hex_head(item.get("result")))
         .max()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn passive_latest_block_batch() {
+        let request = parse_request(br#"[{"method":"eth_getBlockByNumber","params":["latest",false],"id":1},{"method":"eth_getBlockByNumber","params":["safe",false],"id":2},{"method":"eth_getBlockByNumber","params":["latest",false],"id":3}]"#).unwrap();
+        assert_eq!(head_from(&request, br#"[{"id":2,"result":{"number":"0xffff"}},{"id":1,"result":{"number":"0x29"}},{"id":3,"result":{"number":"wrong"}},{"id":9,"result":{"number":"0xff"}}]"#), Some(41));
+    }
+
     #[test]
     fn shared_vectors() {
         let vectors: Vec<Value> = serde_json::from_str(include_str!("vectors.json")).unwrap();
