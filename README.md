@@ -152,9 +152,9 @@ An incident is something a person would have been paged for. Defaults, per chain
 
 ## Read the dashboard
 
-![Local Grafana rehearsal showing traffic, latency, five firing incidents and provider head lag](assets/dashboard.png)
+![Local Grafana dashboard showing a firing JSON-RPC incident, its error count, and traffic from two simulated endpoints](assets/dashboard.png)
 
-Firing and pending incidents appear at the top, including on mobile. Incident history shows which rules fired within the current chain and provider filters. Select a single provider to isolate its history. **No samples** means no matching request telemetry, **Awaiting rules** means requests arrived before the first incident-rule sample, and **Quiet** means the rules evaluated with no firing incidents.
+Firing and pending incidents appear at the top, including on mobile. Incident history shows which rules fired within the current chain and provider filters. Select a single provider to isolate its history. **No samples** means no matching request telemetry, **Awaiting rules** means requests arrived before the first incident-rule sample, and **Quiet** means the rules evaluated with no firing incidents. [Desktop and mobile screenshots](assets/integration-review/README.md)
 
 The request overview counts requests from the selected SDK processes at the end of the time range. A failure first scraped at a count of one appears immediately. Counters reset when a process restarts. Provider success includes valid caller rejections, which also appear under **Caller errors**.
 
