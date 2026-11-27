@@ -395,6 +395,7 @@ add(
         "fieldConfig": {
             "defaults": {
                 "min": 0,
+                "displayName": "${__field.labels.outcome}",
                 "color": {"mode": "fixed", "fixedColor": "#b9a4ff"},
                 "decimals": 0,
             },
