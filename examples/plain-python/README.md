@@ -1,6 +1,6 @@
 # Plain Python with Prometheus
 
-A complete app that reads `eth_blockNumber` from one endpoint at most once per second, serves its latest result at `/`, and exports `/metrics`. It uses the local Python package while that package awaits its first release. See the [SDK installation guide](../../python/README.md) for its intended package install command.
+A complete app that reads `eth_blockNumber` from one endpoint at most once per second, serves its latest result at `/`, and exports `/metrics`. It uses the published Python SDK. [Installation guide](../../python/README.md)
 
 ## Install and run
 
@@ -8,7 +8,7 @@ From this example directory:
 
 ```bash
 python3 -m venv ../../.venv
-../../.venv/bin/python -m pip install ../../python
+../../.venv/bin/python -m pip install -r requirements.txt
 cp .env.example .env
 chmod 600 .env
 ```

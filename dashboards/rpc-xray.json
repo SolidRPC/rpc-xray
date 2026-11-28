@@ -6,7 +6,7 @@
     "rpc-xray"
   ],
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "editable": true,
   "graphTooltip": 1,
   "time": {
@@ -114,7 +114,7 @@
       "transparent": true,
       "options": {
         "mode": "markdown",
-        "content": "## RPC X-Ray\nCounts cover active SDK processes. Charts follow the time range."
+        "content": "## RPC X-Ray\nCurrent incidents for the selected chain and provider."
       },
       "id": 1,
       "gridPos": {
@@ -122,6 +122,456 @@
         "y": 0,
         "w": 24,
         "h": 3
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Firing incidents",
+      "description": "Firing incident rules matching the selected chain and provider.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "count(ALERTS{alertstate=\"firing\", rpc_xray=\"incident\", chain=~\"$chain\", provider=~\"$provider\"}) or (0 * (count(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}) and on () rpc_xray:incident_any))",
+          "legendFormat": "Firing incidents",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#747c89"
+          },
+          "mappings": [],
+          "decimals": 0,
+          "noValue": "Unmeasured"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Firing incidents"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "#30a46c",
+                      "value": null
+                    },
+                    {
+                      "color": "#e5484d",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "vertical",
+        "text": {
+          "valueSize": 36
+        },
+        "wideLayout": true
+      },
+      "id": 9,
+      "gridPos": {
+        "x": 0,
+        "y": 3,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Pending incidents",
+      "description": "Rules waiting for their configured hold time.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "count(ALERTS{alertstate=\"pending\", rpc_xray=\"incident\", chain=~\"$chain\", provider=~\"$provider\"}) or (0 * (count(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}) and on () rpc_xray:incident_any))",
+          "legendFormat": "Pending incidents",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#c4cbd6"
+          },
+          "mappings": [],
+          "decimals": 0,
+          "noValue": "Unmeasured"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "vertical",
+        "text": {
+          "valueSize": 36
+        },
+        "wideLayout": true
+      },
+      "id": 10,
+      "gridPos": {
+        "x": 6,
+        "y": 3,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Time since head advanced",
+      "description": "Age of the oldest last advance among measured providers. Requires a recent head observation.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max(time() - rpc_xray_head_last_advance_timestamp_seconds{chain=~\"$chain\", provider=~\"$provider\"})",
+          "legendFormat": "Time since head advanced",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#a9cddd"
+          },
+          "mappings": [],
+          "decimals": 0,
+          "noValue": "Head unmeasured"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "vertical",
+        "text": {
+          "valueSize": 36
+        },
+        "wideLayout": true
+      },
+      "id": 11,
+      "gridPos": {
+        "x": 12,
+        "y": 3,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Head lag \u00b7 blocks",
+      "description": "Blocks behind a peer on the same chain. Two measured providers on one chain in the same registry are required.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max(rpc_xray_head_lag_blocks{chain=~\"$chain\", provider=~\"$provider\"} and on(job,instance,chain) (count by(job,instance,chain)(max by(job,instance,chain,provider)(rpc_xray_head_block)) > 1))",
+          "legendFormat": "Head lag \u00b7 blocks",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#a9cddd"
+          },
+          "mappings": [],
+          "decimals": 0,
+          "noValue": "Needs two heads"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "vertical",
+        "text": {
+          "valueSize": 36
+        },
+        "wideLayout": true
+      },
+      "id": 12,
+      "gridPos": {
+        "x": 18,
+        "y": 3,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "state-timeline",
+      "title": "Incident history",
+      "description": "Each row shows when a rule fired on any selected provider. Select a chain and provider to isolate its history. Quiet requires both request samples and a rule evaluation. Awaiting rules means requests arrived before the first rule sample. No samples means no matching request telemetry.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "label_replace(max by (alertname) (ALERTS{alertstate=\"firing\", rpc_xray=\"incident\", chain=~\"$chain\", provider=~\"$provider\"}), \"incident\", \"$1\", \"alertname\", \"(?:RpcXray)?(.+)\") or on () label_replace(0 * (count(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}) and on () rpc_xray:incident_any), \"incident\", \"Quiet\", \"__name__\", \".*\") or on () label_replace(2 + 0 * count(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}), \"incident\", \"Awaiting rules\", \"__name__\", \".*\") or on () label_replace(vector(3), \"incident\", \"No samples\", \"__name__\", \".*\")",
+          "legendFormat": "{{incident}}",
+          "refId": "A",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 75,
+            "lineWidth": 0,
+            "spanNulls": false
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Quiet",
+                  "color": "#394652"
+                },
+                "1": {
+                  "text": "Firing",
+                  "color": "#e5484d"
+                },
+                "2": {
+                  "text": "Awaiting rules",
+                  "color": "#f5a524"
+                },
+                "3": {
+                  "text": "No samples",
+                  "color": "#30343c"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "never",
+        "rowHeight": 0.75,
+        "mergeValues": true,
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "id": 13,
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 14,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Observed errors by outcome",
+      "description": "Current counters from the selected running exporters. Includes the first observation. Each exporter restarts its counters at zero. The time picker sets the evaluation endpoint.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (outcome) (rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\",outcome!=\"ok\"}) or on () label_replace(0 * sum(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}), \"outcome\", \"No errors\", \"__name__\", \".*\")",
+          "legendFormat": "{{outcome}}",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "displayName": "${__field.labels.outcome}",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#b9a4ff"
+          },
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "caller_error"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#97b4cf"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "No errors"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#747c89"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "displayMode": "basic",
+        "namePlacement": "left",
+        "orientation": "horizontal",
+        "showUnfilled": false,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "text": {
+          "valueSize": 18,
+          "titleSize": 13
+        },
+        "valueMode": "text"
+      },
+      "id": 14,
+      "gridPos": {
+        "x": 14,
+        "y": 7,
+        "w": 10,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "row",
+      "title": "Request traffic and outcomes",
+      "collapsed": false,
+      "panels": [],
+      "id": 8,
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 24,
+        "h": 1
       },
       "datasource": {
         "type": "prometheus",
@@ -179,7 +629,7 @@
       "id": 2,
       "gridPos": {
         "x": 0,
-        "y": 3,
+        "y": 15,
         "w": 6,
         "h": 4
       },
@@ -239,7 +689,7 @@
       "id": 3,
       "gridPos": {
         "x": 6,
-        "y": 3,
+        "y": 15,
         "w": 6,
         "h": 4
       },
@@ -330,7 +780,7 @@
       "id": 4,
       "gridPos": {
         "x": 12,
-        "y": 3,
+        "y": 15,
         "w": 6,
         "h": 4
       },
@@ -390,7 +840,7 @@
       "id": 5,
       "gridPos": {
         "x": 18,
-        "y": 3,
+        "y": 15,
         "w": 6,
         "h": 4
       },
@@ -497,7 +947,7 @@
       "id": 6,
       "gridPos": {
         "x": 0,
-        "y": 7,
+        "y": 19,
         "w": 14,
         "h": 8
       },
@@ -599,449 +1049,9 @@
       "id": 7,
       "gridPos": {
         "x": 14,
-        "y": 7,
+        "y": 19,
         "w": 10,
         "h": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "type": "row",
-      "title": "Incidents and chain head",
-      "collapsed": false,
-      "panels": [],
-      "id": 8,
-      "gridPos": {
-        "x": 0,
-        "y": 15,
-        "w": 24,
-        "h": 1
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Firing incidents",
-      "description": "Firing incident rules matching the selected chain and provider.",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "count(ALERTS{alertstate=\"firing\", rpc_xray=\"incident\", chain=~\"$chain\", provider=~\"$provider\"}) or (0 * (count(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}) and on () rpc_xray:incident_any))",
-          "legendFormat": "Firing incidents",
-          "refId": "A",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#747c89"
-          },
-          "mappings": [],
-          "decimals": 0,
-          "noValue": "Unmeasured"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Firing incidents"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "thresholds"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "#30a46c",
-                      "value": null
-                    },
-                    {
-                      "color": "#e5484d",
-                      "value": 1
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value",
-        "justifyMode": "auto",
-        "orientation": "vertical",
-        "text": {
-          "valueSize": 36
-        },
-        "wideLayout": true
-      },
-      "id": 9,
-      "gridPos": {
-        "x": 0,
-        "y": 16,
-        "w": 6,
-        "h": 4
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Pending incidents",
-      "description": "Rules waiting for their configured hold time.",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "count(ALERTS{alertstate=\"pending\", rpc_xray=\"incident\", chain=~\"$chain\", provider=~\"$provider\"}) or (0 * (count(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}) and on () rpc_xray:incident_any))",
-          "legendFormat": "Pending incidents",
-          "refId": "A",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#c4cbd6"
-          },
-          "mappings": [],
-          "decimals": 0,
-          "noValue": "Unmeasured"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value",
-        "justifyMode": "auto",
-        "orientation": "vertical",
-        "text": {
-          "valueSize": 36
-        },
-        "wideLayout": true
-      },
-      "id": 10,
-      "gridPos": {
-        "x": 6,
-        "y": 16,
-        "w": 6,
-        "h": 4
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Time since head advanced",
-      "description": "Age of the oldest last advance among measured providers. Requires a recent head observation.",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "max(time() - rpc_xray_head_last_advance_timestamp_seconds{chain=~\"$chain\", provider=~\"$provider\"})",
-          "legendFormat": "Time since head advanced",
-          "refId": "A",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#a9cddd"
-          },
-          "mappings": [],
-          "decimals": 0,
-          "noValue": "Head unmeasured"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value",
-        "justifyMode": "auto",
-        "orientation": "vertical",
-        "text": {
-          "valueSize": 36
-        },
-        "wideLayout": true
-      },
-      "id": 11,
-      "gridPos": {
-        "x": 12,
-        "y": 16,
-        "w": 6,
-        "h": 4
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Head lag \u00b7 blocks",
-      "description": "Blocks behind a peer on the same chain. Two measured providers on one chain in the same registry are required.",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "max(rpc_xray_head_lag_blocks{chain=~\"$chain\", provider=~\"$provider\"} and on(job,instance,chain) (count by(job,instance,chain)(max by(job,instance,chain,provider)(rpc_xray_head_block)) > 1))",
-          "legendFormat": "Head lag \u00b7 blocks",
-          "refId": "A",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#a9cddd"
-          },
-          "mappings": [],
-          "decimals": 0,
-          "noValue": "Needs two heads"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value",
-        "justifyMode": "auto",
-        "orientation": "vertical",
-        "text": {
-          "valueSize": 36
-        },
-        "wideLayout": true
-      },
-      "id": 12,
-      "gridPos": {
-        "x": 18,
-        "y": 16,
-        "w": 6,
-        "h": 4
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "type": "state-timeline",
-      "title": "Incident history",
-      "description": "Each row is a firing incident for the selected providers. A blank period means telemetry was absent or the rule was inactive.",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "max by (alertname, chain, provider) (ALERTS{alertstate=\"firing\", rpc_xray=\"incident\", chain=~\"$chain\", provider=~\"$provider\"}) or on () label_replace(0 * (count(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}) and on () rpc_xray:incident_any), \"alertname\", \"No firing incidents\", \"__name__\", \".*\")",
-          "legendFormat": "{{alertname}}  {{provider}}",
-          "refId": "A",
-          "instant": false,
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "fillOpacity": 75,
-            "lineWidth": 0,
-            "spanNulls": false
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "Quiet",
-                  "color": "#394652"
-                },
-                "1": {
-                  "text": "Firing",
-                  "color": "#e5484d"
-                }
-              }
-            }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "showValue": "never",
-        "rowHeight": 0.75,
-        "mergeValues": true,
-        "legend": {
-          "showLegend": false
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "id": 13,
-      "gridPos": {
-        "x": 0,
-        "y": 20,
-        "w": 14,
-        "h": 7
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
-      "type": "bargauge",
-      "title": "Observed errors by outcome",
-      "description": "Current counters from the selected running exporters. Includes the first observation. Each exporter restarts its counters at zero. The time picker sets the evaluation endpoint.",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "sum by (outcome) (rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\",outcome!=\"ok\"}) or on () label_replace(0 * sum(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}), \"outcome\", \"No errors\", \"__name__\", \".*\")",
-          "legendFormat": "{{outcome}}",
-          "refId": "A",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "min": 0,
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#b9a4ff"
-          },
-          "decimals": 0
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "caller_error"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#97b4cf"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "No errors"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#747c89"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "displayMode": "basic",
-        "orientation": "horizontal",
-        "showUnfilled": false,
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "values": false
-        },
-        "text": {
-          "valueSize": 18,
-          "titleSize": 13
-        },
-        "valueMode": "text"
-      },
-      "id": 14,
-      "gridPos": {
-        "x": 14,
-        "y": 20,
-        "w": 10,
-        "h": 7
       },
       "datasource": {
         "type": "prometheus",

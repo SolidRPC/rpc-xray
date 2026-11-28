@@ -1,0 +1,1 @@
+solidrpc-rpc-xray==0.1.0

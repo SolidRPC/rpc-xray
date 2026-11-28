@@ -2,9 +2,11 @@
 
 **See every request your RPC provider failed.**
 
-Add three lines of code. rpc-xray counts the errors, stale blocks and slow calls your users hit, and shows what they have cost you so far.
+Instrument your existing RPC client to see which methods drive traffic, when an endpoint slows down, and which calls fail even though the server returned HTTP 200.
 
-![A red line of failed user requests climbs while a flat green line shows where it should be](assets/hero.png)
+![Grafana shows request counts, traffic by RPC method, and a p95 latency spike on the archive endpoint](assets/dashboard.png)
+
+In this simulated Ethereum workload, `eth_getLogs` traffic rose around 10:25 UTC. The archive endpoint’s p95 response time peaked at 1.37 seconds. The primary stayed near 100 ms, below the 300 ms target.
 
 Your requests pass through untouched. rpc-xray measures each one, exposes Prometheus metrics, and ships a Grafana dashboard, alert rules and Slack incident messages that work as they are.
 
@@ -16,7 +18,7 @@ Node.js 20 or newer. The package has no runtime dependencies.
 npm install @solidrpc/rpc-xray
 ```
 
-The npm package is published. For testing unreleased changes, use the [development instructions](#development-and-release-testing).
+The [SDK table](#language-sdks) lists installation options for all four languages.
 
 For an existing viem app:
 
@@ -32,7 +34,7 @@ const client = createPublicClient({
 await serveMetrics({ host: "127.0.0.1", port: 9464 });
 ```
 
-Here `url` is your existing endpoint. The explicit chain label and disabled probes keep instrumentation from adding RPC calls. Omit these options to enable chain detection and the default head probes. See [request overhead](#what-it-does-to-your-requests) before choosing.
+Here `url` is your existing endpoint. The explicit chain label and disabled probes keep instrumentation from adding RPC calls. With default options, a successful first call to a new endpoint normally makes three RPC requests in total (the application call, one chain-ID lookup and one head probe). The SDK then probes every 15 seconds. Disabling probes alone still permits the chain lookup. [Request overhead](#what-it-does-to-your-requests)
 
 Start with the [complete plain Node.js example](examples/plain-node/README.md) for a runnable app, `/metrics`, shutdown handling, and matching Prometheus configuration. [Other JavaScript integrations](js/README.md) cover ethers and existing HTTP servers.
 
@@ -42,12 +44,12 @@ All four SDKs use the same metric names, labels, histogram buckets, and error cl
 
 | Language | Supported integration | Package | Complete example |
 |---|---|---|---|
-| [JavaScript / TypeScript](js/README.md) | fetch, viem, ethers | `@solidrpc/rpc-xray` on npm | [Node.js](examples/plain-node/README.md) |
-| [Python](python/README.md) | HTTPX sync and async, requests, web3.py HTTPProvider | `solidrpc-rpc-xray` on PyPI, not published yet | [Python](examples/plain-python/README.md) |
-| [Go](go/README.md) | `net/http`, `go-ethereum` | `github.com/SolidRPC/rpc-xray/go`, not tagged yet | [HTTP](examples/plain-go/README.md), [go-ethereum](examples/go-ethereum/README.md) |
-| [Rust](rust/README.md) | reqwest 0.13, Alloy 2.5 | `solidrpc-rpc-xray` on crates.io, not published yet | [reqwest](examples/plain-rust/README.md), [Alloy](examples/alloy/README.md) |
+| [JavaScript / TypeScript](js/README.md) | fetch, viem, ethers | [@solidrpc/rpc-xray 0.1.2 on npm](https://www.npmjs.com/package/@solidrpc/rpc-xray/v/0.1.2) | [Node.js](examples/plain-node/README.md) |
+| [Python](python/README.md) | HTTPX sync and async, requests, web3.py HTTPProvider | [solidrpc-rpc-xray 0.1.0 on PyPI](https://pypi.org/project/solidrpc-rpc-xray/0.1.0/) | [Python](examples/plain-python/README.md) |
+| [Go](go/README.md) | `net/http`, `go-ethereum` | [github.com/SolidRPC/rpc-xray/go v0.1.0](https://pkg.go.dev/github.com/SolidRPC/rpc-xray/go@v0.1.0) | [HTTP](examples/plain-go/README.md), [go-ethereum](examples/go-ethereum/README.md) |
+| [Rust](rust/README.md) | reqwest 0.13, Alloy 2.5 | [solidrpc-rpc-xray 0.1.0 on crates.io](https://crates.io/crates/solidrpc-rpc-xray/0.1.0) | [reqwest](examples/plain-rust/README.md), [Alloy](examples/alloy/README.md) |
 
-Each SDK README leads with its intended package install command and includes local package instructions for unreleased versions. Every example has `/metrics`, shutdown handling, and a matching Prometheus config. Run one example at a time on the default port 9464, or assign separate ports and scrape targets.
+The SDK guides and examples use the public registries. Every example has `/metrics`, shutdown handling, and a matching Prometheus config. Run one example at a time on the default port 9464, or assign separate ports and scrape targets.
 
 Python, Go, and Rust add no RPC calls of their own. They read the chain head from successful `eth_blockNumber` and `eth_getBlockByNumber("latest", …)` responses your application already receives, so a stale or lagging provider shows up as soon as your app polls the head. Supply a chain label explicitly. If your app never reads the latest head, record a separate probe with `record_probe` or `RecordProbe`. JavaScript detects chains and probes heads itself, described below.
 
@@ -60,9 +62,8 @@ Integrate RPC X-Ray using https://github.com/SolidRPC/rpc-xray.
 
 1. Read the root README and the README for the application's language.
    Find the existing HTTP JSON-RPC clients and a supported adapter.
-2. Install the language package with the existing package manager. If the
-   requested version is not published yet, report that release prerequisite.
-   The documented local package is a fallback for pre-release testing.
+2. Install the published package from the language’s registry with the existing
+   package manager. Use a local package only when testing development changes.
 3. Use the supported HTTP adapter without changing URLs, headers, retries,
    or timeouts. Explain any required call-site changes, including Rust's
    explicit reqwest response wrapper. Keep credentials out of code and logs.
@@ -153,11 +154,15 @@ An incident is something a person would have been paged for. Defaults, per chain
 
 ## Read the dashboard
 
-![Local Grafana rehearsal showing traffic, latency, five firing incidents and provider head lag](assets/dashboard.png)
+![Grafana shows the archive endpoint’s rolling success rate dropping to 96% as JSON-RPC errors, rate limits, and HTTP errors rise](assets/provider-failures.png)
 
-The overview counts requests from the selected SDK processes at the end of the time range. A failure first scraped at a count of one appears immediately. Counters reset when a process restarts. Provider success includes valid caller rejections, which also appear under **Caller errors**.
+During the same simulated incident, the archive endpoint’s rolling one-hour success rate fell to about 96%. JSON-RPC errors inside HTTP 200 responses were the largest failure category. Monitoring HTTP status alone would have missed them.
 
-Traffic, latency and failure-rate charts follow the time picker. Prometheus needs at least two scrapes to estimate a rate or increase. The incident history shows when each rule fired. Head freshness needs recent head observations, and peer lag needs two measured providers on one chain in the same registry.
+Select a chain and provider to see its firing and pending incidents and the rules that fired during the selected range. **No samples** means no matching request telemetry, **Awaiting rules** means requests arrived before the first incident-rule sample, and **Quiet** means the rules evaluated with no firing incidents.
+
+The request overview counts requests from the selected SDK processes at the end of the time range. A failure first scraped at a count of one appears immediately. Counters reset when a process restarts. Provider success includes valid caller rejections, which also appear under **Caller errors**.
+
+Traffic, latency and failure-rate charts follow the time picker. Prometheus needs at least two scrapes to estimate a rate or increase. Head freshness needs recent head observations, and peer lag needs two measured providers on one chain in the same registry.
 
 The impact row estimates excess wait and the value of failed calls over the selected range. Set a value per request on each measured instance to include it in the dollar estimate. Edit the success and p95 targets at the top to change the chart reference lines.
 

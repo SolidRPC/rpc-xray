@@ -1,6 +1,6 @@
 # Alloy with Prometheus
 
-A complete Alloy 2.5 app that reads `eth_blockNumber` from one endpoint at most once per second, serves its latest result at `/`, and exports `/metrics`. It uses the local Rust package while that package awaits its first release. See the [SDK installation guide](../../rust/README.md) for its intended package install command.
+A complete Alloy 2.5 app that reads `eth_blockNumber` from one endpoint at most once per second, serves its latest result at `/`, and exports `/metrics`. It uses the published Rust SDK. [Installation guide](../../rust/README.md)
 
 It builds the normal Alloy provider around `XrayHttp`, using the app's existing reqwest client. The transport records HTTP status before Alloy decodes the body, so HTTP 429 remains `rate_limited` even when the JSON-RPC body contains an invalid-params error. It preserves Alloy's returned packets and errors.
 

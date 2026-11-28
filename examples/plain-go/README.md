@@ -1,6 +1,8 @@
 # Plain Go with Prometheus
 
-A complete app that reads `eth_blockNumber` from one endpoint at most once per second, serves its latest result at `/`, and exports `/metrics`. It uses the local Go package while that package awaits its first release. See the [SDK installation guide](../../go/README.md) for its intended package install command.
+A complete app that reads `eth_blockNumber` from one endpoint at most once per second, serves its latest result at `/`, and exports `/metrics`. It uses the published Go SDK. [Installation guide](../../go/README.md)
+
+The example currently installs SDK v0.1.0. If a client decodes one JSON value and closes a chunked HTTP 200 response before EOF, this version can count a provider error as `ok`. [Go transport behavior](../../go/README.md)
 
 ## Install and run
 

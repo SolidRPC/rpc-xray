@@ -220,7 +220,7 @@ add(
         "transparent": True,
         "options": {
             "mode": "markdown",
-            "content": "## RPC X-Ray\nCounts cover active SDK processes. Charts follow the time range.",
+            "content": "## RPC X-Ray\nCurrent incidents for the selected chain and provider.",
         },
     },
     0,
@@ -228,21 +228,21 @@ add(
     24,
     3,
 )
-kpi("Requests observed", total, "locale", 0, 3, 6, "#b9a4ff", observed, 0)
+kpi("Requests observed", total, "locale", 0, 15, 6, "#b9a4ff", observed, 0)
 kpi(
     "Provider success",
     success,
     "percentunit",
     6,
-    3,
+    15,
     6,
     "#c4cbd6",
     observed
     + " Caller errors count as provider responses. Application success can be lower.",
     2,
 )
-kpi("Provider failures", failed, "locale", 12, 3, 6, "#e8b68e", observed, 0)
-kpi("Caller errors", caller, "locale", 18, 3, 6, "#97b4cf", observed, 0)
+kpi("Provider failures", failed, "locale", 12, 15, 6, "#e8b68e", observed, 0)
+kpi("Caller errors", caller, "locale", 18, 15, 6, "#97b4cf", observed, 0)
 panels[-2]["fieldConfig"]["overrides"] = [
     threshold_override("Provider failures", [(GREEN, None), (RED, 1)])
 ]
@@ -254,7 +254,7 @@ plot(
     "{{method}}",
     "reqps",
     0,
-    7,
+    19,
     14,
     8,
     "RPC calls per second in the selected range. Batch members count separately.",
@@ -282,18 +282,18 @@ add(
         fill=9,
     ),
     14,
-    7,
+    19,
     10,
     8,
 )
 
-row("Incidents and chain head", 15)
+row("Request traffic and outcomes", 14)
 kpi(
     "Firing incidents",
     f"count({live_alerts}) or (0 * {monitored})",
     "short",
     0,
-    16,
+    3,
     6,
     NEUTRAL,
     "Firing incident rules matching the selected chain and provider.",
@@ -307,7 +307,7 @@ kpi(
     f"count({pending}) or (0 * {monitored})",
     "short",
     6,
-    16,
+    3,
     6,
     "#c4cbd6",
     "Rules waiting for their configured hold time.",
@@ -318,7 +318,7 @@ kpi(
     f"max(time() - rpc_xray_head_last_advance_timestamp_seconds{{{SEL}}})",
     "s",
     12,
-    16,
+    3,
     6,
     "#a9cddd",
     "Age of the oldest last advance among measured providers. Requires a recent head observation.",
@@ -330,7 +330,7 @@ kpi(
     f"max(rpc_xray_head_lag_blocks{{{SEL}}} and on(job,instance,chain) (count by(job,instance,chain)(max by(job,instance,chain,provider)(rpc_xray_head_block)) > 1))",
     "short",
     18,
-    16,
+    3,
     6,
     "#a9cddd",
     "Blocks behind a peer on the same chain. Two measured providers on one chain in the same registry are required.",
@@ -338,13 +338,23 @@ kpi(
     "Needs two heads",
 )
 
-timeline = f'max by (alertname, chain, provider) ({live_alerts}) or on () label_replace(0 * {monitored}, "alertname", "No firing incidents", "__name__", ".*")'
+def history_state(expr, label):
+    return f'label_replace({expr}, "incident", "{label}", "__name__", ".*")'
+
+
+history_firing = f'label_replace(max by (alertname) ({live_alerts}), "incident", "$1", "alertname", "(?:RpcXray)?(.+)")'
+timeline = " or on () ".join([
+    history_firing,
+    history_state(f"0 * {monitored}", "Quiet"),
+    history_state(f"2 + 0 * {signal}", "Awaiting rules"),
+    history_state("vector(3)", "No samples"),
+])
 add(
     {
         "type": "state-timeline",
         "title": "Incident history",
-        "description": "Each row is a firing incident for the selected providers. A blank period means telemetry was absent or the rule was inactive.",
-        "targets": [target(timeline, "{{alertname}}  {{provider}}", "A")],
+        "description": "Each row shows when a rule fired on any selected provider. Select a chain and provider to isolate its history. Quiet requires both request samples and a rule evaluation. Awaiting rules means requests arrived before the first rule sample. No samples means no matching request telemetry.",
+        "targets": [target(timeline, "{{incident}}", "A")],
         "fieldConfig": {
             "defaults": {
                 "custom": {"fillOpacity": 75, "lineWidth": 0, "spanNulls": False},
@@ -354,6 +364,8 @@ add(
                         "options": {
                             "0": {"text": "Quiet", "color": "#394652"},
                             "1": {"text": "Firing", "color": RED},
+                            "2": {"text": "Awaiting rules", "color": AMBER},
+                            "3": {"text": "No samples", "color": "#30343c"},
                         },
                     }
                 ],
@@ -369,7 +381,7 @@ add(
         },
     },
     0,
-    20,
+    7,
     14,
     7,
 )
@@ -383,6 +395,7 @@ add(
         "fieldConfig": {
             "defaults": {
                 "min": 0,
+                "displayName": "${__field.labels.outcome}",
                 "color": {"mode": "fixed", "fixedColor": "#b9a4ff"},
                 "decimals": 0,
             },
@@ -393,6 +406,7 @@ add(
         },
         "options": {
             "displayMode": "basic",
+            "namePlacement": "left",
             "orientation": "horizontal",
             "showUnfilled": False,
             "reduceOptions": {"calcs": ["lastNotNull"], "values": False},
@@ -401,7 +415,7 @@ add(
         },
     },
     14,
-    20,
+    7,
     10,
     7,
 )
@@ -602,7 +616,7 @@ dashboard = {
     "description": "See every request your RPC provider failed.",
     "tags": ["rpc-xray"],
     "schemaVersion": 39,
-    "version": 2,
+    "version": 3,
     "editable": True,
     "graphTooltip": 1,
     "time": {"from": "now-30m", "to": "now"},
@@ -630,7 +644,7 @@ dashboard = {
             text_variable("target_p95", "p95 target (s)", "0.3"),
         ]
     },
-    "panels": panels,
+    "panels": sorted(panels, key=lambda p: (p["gridPos"]["y"], p["gridPos"]["x"])),
 }
 
 path = pathlib.Path(__file__).with_name("rpc-xray.json")

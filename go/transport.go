@@ -1,12 +1,15 @@
 package rpcxray
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 )
 
 type Transport struct {
@@ -86,6 +89,7 @@ func (t *Transport) CloseIdleConnections() {
 }
 
 type bodyCapture struct {
+	mu          sync.Mutex
 	inner       io.ReadCloser
 	observation *Observation
 	status, cap int
@@ -98,35 +102,57 @@ type bodyCapture struct {
 
 func (b *bodyCapture) Read(p []byte) (int, error) {
 	n, err := b.inner.Read(p)
-	if !b.done {
-		if len(b.body)+n > b.cap {
-			b.done = true
-			b.body = nil
-			b.observation.Finish(b.status, nil, "")
+	b.mu.Lock()
+	if b.done {
+		b.mu.Unlock()
+		return n, err
+	}
+
+	var complete []byte
+	var failure string
+	if n <= b.cap-len(b.body) {
+		if b.remaining >= 0 {
+			b.remaining -= int64(n)
+		}
+		if err != nil && err != io.EOF {
+			failure = failureKind(err, b.context, b.cancel)
 		} else {
 			b.body = append(b.body, p[:n]...)
-		}
-		if !b.done {
-			if b.remaining >= 0 {
-				b.remaining -= int64(n)
+			if err != io.EOF && b.remaining != 0 {
+				b.mu.Unlock()
+				return n, err
 			}
-			if err != nil && err != io.EOF {
-				b.done = true
-				b.observation.Finish(b.status, nil, failureKind(err, b.context, b.cancel))
-			} else if err == io.EOF || b.remaining == 0 {
-				b.done = true
-				b.observation.Finish(b.status, b.body, "")
-			}
+			complete = b.body
 		}
 	}
+	b.done = true
+	b.body = nil
+	b.mu.Unlock()
+	b.observation.Finish(b.status, complete, failure)
 	return n, err
 }
+
 func (b *bodyCapture) Close() error {
 	err := b.inner.Close()
-	if !b.done {
-		b.done = true
-		b.observation.Finish(b.status, nil, "")
+	b.mu.Lock()
+	if b.done {
+		b.mu.Unlock()
+		return err
 	}
+	b.done = true
+	captured := b.body
+	unknownLength := b.remaining < 0
+	b.body = nil
+	b.mu.Unlock()
+
+	var complete []byte
+	if unknownLength {
+		captured = bytes.TrimLeft(captured, " \n\r\t")
+		if len(captured) > 0 && (captured[0] == '{' || captured[0] == '[') && json.Valid(captured) {
+			complete = captured
+		}
+	}
+	b.observation.Finish(b.status, complete, "")
 	return err
 }
 

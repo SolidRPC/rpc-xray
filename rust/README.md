@@ -10,26 +10,23 @@ The crate name is `solidrpc-rpc-xray` and the import is `solidrpc_rpc_xray`. Ins
 cargo add solidrpc-rpc-xray
 ```
 
-For development, use a path dependency pointing to this directory. The [complete example](https://github.com/SolidRPC/rpc-xray/blob/main/examples/plain-rust/README.md) already uses one. Package builds do not publish anything.
+The [complete reqwest example](https://github.com/SolidRPC/rpc-xray/blob/main/examples/plain-rust/README.md) uses the crate from crates.io and exposes its metrics through an HTTP server.
 
 ## reqwest
 
 ```rust,no_run
 use solidrpc_rpc_xray::Xray;
 
-async fn call(client: &reqwest::Client, url: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let telemetry = Xray::default();
+async fn call(telemetry: &Xray, client: &reqwest::Client, url: &str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
     let request = client.post(url).json(&serde_json::json!({
         "jsonrpc": "2.0", "id": 1, "method": "eth_blockNumber", "params": []
     })).build()?;
     let response = telemetry.execute(client, request, "ethereum").await?;
-    let body: serde_json::Value = response.json().await?;
-    let _ = (body, telemetry.metrics());
-    Ok(())
+    response.json().await
 }
 ```
 
-Keep one telemetry instance per process and expose its `metrics()` at `GET /metrics` using `solidrpc_rpc_xray::CONTENT_TYPE`. Clones share the same registry.
+Create `let telemetry = Xray::default();` once at application startup. Pass `&telemetry` to every call and expose its `metrics()` at `GET /metrics` using `solidrpc_rpc_xray::CONTENT_TYPE`. Clones share the same registry.
 
 `execute` uses your existing client and request unchanged. It returns an explicit `solidrpc_rpc_xray::Response` wrapper, with `status()`, `headers()`, and `url()` available through dereferencing. Consume it through `bytes()`, `json()`, `chunk()`, or `bytes_stream()`. Transport and body errors remain the original reqwest errors. `json()` returns a boxed transport or serde error. The wrapper does not provide every consuming method on reqwest's Response.
 
@@ -45,8 +42,6 @@ alloy = { version = "2.5", default-features = false, features = ["providers", "r
 solidrpc-rpc-xray = { version = "0.1", features = ["alloy"] }
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
 ```
-
-Until the SDK is published, replace its `version` entry with a `path` to this directory.
 
 ```rust,no_run
 use alloy::{providers::ProviderBuilder, rpc::client::ClientBuilder};

@@ -2,7 +2,9 @@
 
 A complete `ethclient` app that reads `eth_blockNumber` from one existing endpoint at most once per second, serves its latest result at `/`, and exports `/metrics`. RPC X-Ray wraps the HTTP transport supplied to `rpc.DialOptions`. The application keeps using the usual `ethclient.BlockNumber` API.
 
-This example requires Go 1.24 or newer because it uses go-ethereum v1.17.5. The SDK itself requires Go 1.23 and has no dependencies outside the standard library. This example is a separate module and uses the local SDK while that package awaits its first release. See the [SDK installation guide](../../go/README.md) for the intended package install command.
+This example requires Go 1.24 or newer because it uses go-ethereum v1.17.5. The SDK itself requires Go 1.23 and has no dependencies outside the standard library. This example is a separate module using the released Go SDK. [Installation guide](../../go/README.md)
+
+The example currently installs SDK v0.1.0. If a client decodes one JSON value and closes a chunked HTTP 200 response before EOF, this version can count a provider error as `ok`. [Go transport behavior](../../go/README.md)
 
 ## Install and run
 
