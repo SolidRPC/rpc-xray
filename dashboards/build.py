@@ -342,7 +342,7 @@ def history_state(expr, label):
     return f'label_replace({expr}, "incident", "{label}", "__name__", ".*")'
 
 
-history_firing = f'label_replace(max by (alertname) ({live_alerts}), "incident", "$1", "alertname", "RpcXray(.*)")'
+history_firing = f'label_replace(max by (alertname) ({live_alerts}), "incident", "$1", "alertname", "(?:RpcXray)?(.+)")'
 timeline = " or on () ".join([
     history_firing,
     history_state(f"0 * {monitored}", "Quiet"),

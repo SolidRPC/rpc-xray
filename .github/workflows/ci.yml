@@ -167,14 +167,12 @@ jobs:
         run: |
           python3 scripts/check-metrics.py /tmp/rust-metrics.txt
           cargo fmt --manifest-path examples/plain-rust/Cargo.toml --check
-          cargo metadata --locked --manifest-path examples/plain-rust/Cargo.toml --format-version 1 > /dev/null
-          cargo build --config "patch.crates-io.solidrpc-rpc-xray.path='$GITHUB_WORKSPACE/rust'" --manifest-path examples/plain-rust/Cargo.toml
+          bash scripts/build-rust-example.sh examples/plain-rust
           python3 scripts/test-example.py rust
       - name: Build and test the Alloy integration
         run: |
           cargo fmt --manifest-path examples/alloy/Cargo.toml --check
-          cargo metadata --locked --manifest-path examples/alloy/Cargo.toml --format-version 1 > /dev/null
-          cargo build --config "patch.crates-io.solidrpc-rpc-xray.path='$GITHUB_WORKSPACE/rust'" --manifest-path examples/alloy/Cargo.toml
+          bash scripts/build-rust-example.sh examples/alloy
           python3 scripts/test-example.py alloy
       - uses: actions/upload-artifact@v4
         with:

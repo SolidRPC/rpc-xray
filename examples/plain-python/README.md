@@ -8,7 +8,7 @@ From this example directory:
 
 ```bash
 python3 -m venv ../../.venv
-../../.venv/bin/python -m pip install solidrpc-rpc-xray==0.1.0
+../../.venv/bin/python -m pip install -r requirements.txt
 cp .env.example .env
 chmod 600 .env
 ```

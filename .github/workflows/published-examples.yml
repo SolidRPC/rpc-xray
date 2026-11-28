@@ -1,0 +1,67 @@
+name: Published SDK examples
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - working-directory: examples/plain-node
+        run: |
+          npm install --no-package-lock
+          npm test
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: |
+          python -m pip install -r examples/plain-python/requirements.txt
+          python scripts/test-example.py python
+          python scripts/test-example.py python --gzip
+
+  go:
+    runs-on: ubuntu-latest
+    env:
+      GOWORK: 'off'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache-dependency-path: examples/*/go.sum
+      - run: |
+          mkdir -p tmp
+          go -C examples/plain-go build -mod=readonly -o ../../tmp/rpc-xray-go .
+          go -C examples/go-ethereum build -mod=readonly -o ../../tmp/rpc-xray-go-ethereum .
+          python3 scripts/test-example.py go
+          python3 scripts/test-example.py go-ethereum
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            examples/plain-rust
+            examples/alloy
+      - run: |
+          cargo build --locked --manifest-path examples/plain-rust/Cargo.toml
+          python3 scripts/test-example.py rust
+          cargo build --locked --manifest-path examples/alloy/Cargo.toml
+          python3 scripts/test-example.py alloy

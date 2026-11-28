@@ -123,20 +123,22 @@ tests = [
                 "values": "1x20",
             },
             {
+                "series": 'ALERTS{alertname="ArchiveReadErrors",alertstate="firing",rpc_xray="incident",chain="ethereum",provider="west.test"}',
+                "values": "1x20",
+            },
+            {
                 "series": 'ALERTS{alertname="RpcXrayTrialOffer",alertstate="firing"}',
                 "values": "1x20",
             },
             {"series": "rpc_xray_offers_enabled", "values": "0x20"},
         ],
         [
-            check("Firing incidents", scalar(1)),
+            check("Firing incidents", scalar(2)),
             check(
                 "Incident history",
                 [
-                    (
-                        '{alertname="RpcXraySlow",incident="Slow"}',
-                        1,
-                    )
+                    ('{alertname="ArchiveReadErrors",incident="ArchiveReadErrors"}', 1),
+                    ('{alertname="RpcXraySlow",incident="Slow"}', 1),
                 ],
             ),
             check("Firing incidents", [], provider="north.test"),

@@ -409,7 +409,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "label_replace(max by (alertname) (ALERTS{alertstate=\"firing\", rpc_xray=\"incident\", chain=~\"$chain\", provider=~\"$provider\"}), \"incident\", \"$1\", \"alertname\", \"RpcXray(.*)\") or on () label_replace(0 * (count(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}) and on () rpc_xray:incident_any), \"incident\", \"Quiet\", \"__name__\", \".*\") or on () label_replace(2 + 0 * count(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}), \"incident\", \"Awaiting rules\", \"__name__\", \".*\") or on () label_replace(vector(3), \"incident\", \"No samples\", \"__name__\", \".*\")",
+          "expr": "label_replace(max by (alertname) (ALERTS{alertstate=\"firing\", rpc_xray=\"incident\", chain=~\"$chain\", provider=~\"$provider\"}), \"incident\", \"$1\", \"alertname\", \"(?:RpcXray)?(.+)\") or on () label_replace(0 * (count(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}) and on () rpc_xray:incident_any), \"incident\", \"Quiet\", \"__name__\", \".*\") or on () label_replace(2 + 0 * count(rpc_xray_requests_total{chain=~\"$chain\", provider=~\"$provider\"}), \"incident\", \"Awaiting rules\", \"__name__\", \".*\") or on () label_replace(vector(3), \"incident\", \"No samples\", \"__name__\", \".*\")",
           "legendFormat": "{{incident}}",
           "refId": "A",
           "instant": false,
