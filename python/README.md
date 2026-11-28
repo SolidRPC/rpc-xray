@@ -16,7 +16,7 @@ To test an unreleased version, build and install the distributable wheel from th
 python3 -m venv .venv
 .venv/bin/python -m pip install build
 .venv/bin/python -m build python
-.venv/bin/python -m pip install 'python/dist/solidrpc_rpc_xray-0.1.0-py3-none-any.whl[requests]' 'web3>=7,<9'
+.venv/bin/python -m pip install 'python/dist/solidrpc_rpc_xray-0.1.1-py3-none-any.whl[requests]' 'web3>=7,<9'
 ```
 
 For an HTTPX-only app, install the same wheel without `[requests]` or `web3`. Existing applications can install the wheel into their own environment and retain their supported web3.py version. The wheel installs the package, not an editable checkout. Building it does not publish anything. Contributor setup is covered under [test and package](#test-and-package).
@@ -79,10 +79,6 @@ The SDK adds no RPC calls. It does not detect chains or schedule probes. Supply 
 Head freshness comes from traffic you already send. A successful `eth_blockNumber` response or a block object returned by `eth_getBlockByNumber("latest", false)` or its full-transaction variant updates the head, head age, last-advance and lag gauges for that chain and provider. A batch entry counts too. No extra request is made. Head gauges are exported while observations stay fresh, up to 120 seconds after the last one, so an app that stops polling does not raise a false stale-head incident. With one observed provider, lag is zero. A second fresh provider on the same chain makes comparison possible.
 
 If your application never reads the latest head, run a separate head probe through an unwrapped client and record it with `telemetry.record_probe(url, chain, head)`, or `head=None` for failure. Probe results are also counted in `rpc_xray_probe_requests_total`. Without any head observations those gauges are absent, not zero. Scraping metrics never sends a request.
-
-## The SolidRPC offer
-
-`rpc_xray_offers_enabled` is `1` by default. When this process has run for a day, projects about 100M requests a month, and saw at least 1% failed requests or a stale head, it writes one line to the `rpc_xray` logger at WARNING level naming the 14-day free trial or $100 credit from SolidRPC and hello@solidrpc.io. It is written once per process. The dashboard and Slack offer use the same gauge. Pass `logger=` to send the line elsewhere, or `offers=False` to turn the offer off everywhere. Nothing is sent to SolidRPC.
 
 ## Test and package
 

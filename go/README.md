@@ -7,10 +7,10 @@ A standard-library HTTP transport wrapper with Prometheus metrics. Go 1.23 or ne
 The module path is `github.com/SolidRPC/rpc-xray/go`. Install the tagged module with the Go CLI.
 
 ```bash
-go get github.com/SolidRPC/rpc-xray/go@v0.1.0
+go get github.com/SolidRPC/rpc-xray/go@v0.1.1
 ```
 
-To test a development checkout, use a temporary Go workspace containing the application and this module. Releases from this subdirectory require tags such as `go/v0.1.0`.
+To test a development checkout, use a temporary Go workspace containing the application and this module. Releases from this subdirectory require tags such as `go/v0.1.1`.
 
 ## Integrate
 
@@ -33,7 +33,7 @@ The [complete go-ethereum example](https://github.com/SolidRPC/rpc-xray/blob/mai
 
 The wrapper only inspects POST bodies that provide `Request.GetBody`. `http.NewRequest` supplies this for `bytes.Reader`, `bytes.Buffer`, and `strings.Reader`. Non-replayable streaming requests are skipped without consuming them. Responses retain their status, headers, and body bytes. The body wrapper copies at most 1 MiB as the caller reads, with no read-ahead or extra network calls. Always close response bodies.
 
-A complete JSON object or batch read by `json.Decoder.Decode` can be classified when you close a chunked response before EOF. The wrapper only examines bytes your application read. Unread, partial, oversized and still-encoded bodies use HTTP status alone. This early-close behavior is in the development version. In v0.1.0, read the bounded response to EOF when you need JSON-RPC error classification for chunked replies. Read errors preserve the original error and record `network` or `timeout`. Context cancellation and `http.Client.Timeout` count as `timeout`, including cancellation while consuming the response body. A configured deadline alone does not turn an unrelated network failure into a timeout. The wrapper neither retries nor sets deadlines.
+A complete JSON object or batch read by `json.Decoder.Decode` can be classified when you close a chunked response before EOF. The wrapper only examines bytes your application read. Unread, partial, oversized and still-encoded bodies use HTTP status alone. This early-close behavior is available starting in v0.1.1. In v0.1.0, read the bounded response to EOF when you need JSON-RPC error classification for chunked replies. Read errors preserve the original error and record `network` or `timeout`. Context cancellation and `http.Client.Timeout` count as `timeout`, including cancellation while consuming the response body. A configured deadline alone does not turn an unrelated network failure into a timeout. The wrapper neither retries nor sets deadlines.
 
 `rpc_xray_requests_total` counts logical JSON-RPC items. One batch HTTP exchange containing three calls increments this counter three times, with each item's method and outcome. The duration histogram records the exchange once with `method="batch"`. go-ethereum reports item failures on each `rpc.BatchElem.Error`, so a nil error from `BatchCallContext` does not mean every item succeeded. Instrumentation preserves this behavior.
 
@@ -46,10 +46,6 @@ The SDK adds no RPC calls. It does not discover chain IDs or schedule probes. Su
 Head freshness comes from traffic you already send. A successful `eth_blockNumber` response or a block object returned by `eth_getBlockByNumber("latest", false)` or its full-transaction variant updates the head, head age, last-advance and lag gauges for that chain and provider. A batch entry counts too. No extra request is made. Head gauges are exported while observations stay fresh, up to 120 seconds after the last one, so an app that stops polling does not raise a false stale-head incident. With one observed provider, lag is zero. A second fresh provider on the same chain makes comparison possible. `ethclient.BlockNumber` sends `eth_blockNumber`, so most go-ethereum apps get head metrics with no change.
 
 If your app never reads the latest head, run a separate head probe through an unwrapped client and call `telemetry.RecordProbe(url, chain, &head)`, or `nil` on failure. Probe results are also counted in `rpc_xray_probe_requests_total`. With no head observations, head gauges are absent. Metrics scrapes do not send RPC requests.
-
-## The SolidRPC offer
-
-`rpc_xray_offers_enabled` is `1` by default. When this process has run for a day, projects about 100M requests a month, and saw at least 1% failed requests or a stale head, it writes one line through the standard `log` package naming the 14-day free trial or $100 credit from SolidRPC and hello@solidrpc.io. It is written once per process. The dashboard and Slack offer use the same gauge. Set `Options.Logger` to send the line elsewhere, or `Options.DisableOffers` to turn the offer off everywhere. Nothing is sent to SolidRPC.
 
 For custom clients, `telemetry.Start(url, chain, requestBytes)` returns an optional observation with `Finish(status, responseBytes, failure)`. Supply an empty failure for HTTP responses or `timeout` / `network`. `Finish` is nil-safe and records at most once.
 
