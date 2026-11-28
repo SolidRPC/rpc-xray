@@ -3796,9 +3796,9 @@ dependencies = [
 
 [[package]]
 name = "solidrpc-rpc-xray"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9996fb28fae8bbb31752599897705cdca13772dd1631b3ea35b3d6b70512a492"
+checksum = "815525e0d3864390a6bc888a43c648cc85024d85722066632a675f564fdf2624"
 dependencies = [
  "alloy-json-rpc",
  "alloy-transport",

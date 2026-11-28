@@ -8,8 +8,8 @@ github.com/RaduBerinde/axisds v0.1.0 h1:YItk/RmU5nvlsv/awo2Fjx97Mfpt4JfgtEVAGPrL
 github.com/RaduBerinde/axisds v0.1.0/go.mod h1:UHGJonU9z4YYGKJxSaC6/TNcLOBptpmM5m2Cksbnw0Y=
 github.com/RaduBerinde/btreemap v0.0.0-20250419174037-3d62b7205d54 h1:bsU8Tzxr/PNz75ayvCnxKZWEYdLMPDkUgticP4a4Bvk=
 github.com/RaduBerinde/btreemap v0.0.0-20250419174037-3d62b7205d54/go.mod h1:0tr7FllbE9gJkHq7CVeeDDFAFKQVy5RnCSSNBOvdqbc=
-github.com/SolidRPC/rpc-xray/go v0.1.0 h1:E5pAlmfa8W+6vix444KoMaDQudEZU2ULfEbbMwhdujg=
-github.com/SolidRPC/rpc-xray/go v0.1.0/go.mod h1:NngrEWBct/lOgQ4zjRT6jCWLObDsi+jGmez0d+F2fZM=
+github.com/SolidRPC/rpc-xray/go v0.1.1 h1:Z6WwuLrJBKthprJecDw5H3a9UHlUpNATzfV/Ua1qLNs=
+github.com/SolidRPC/rpc-xray/go v0.1.1/go.mod h1:NngrEWBct/lOgQ4zjRT6jCWLObDsi+jGmez0d+F2fZM=
 github.com/StackExchange/wmi v1.2.1 h1:VIkavFPXSjcnS+O8yTq7NI32k0R5Aj+v39y29VYDOSA=
 github.com/StackExchange/wmi v1.2.1/go.mod h1:rcmrprowKIVzvc+NUiLncP2uuArMWLCbu9SBzvHz7e8=
 github.com/VictoriaMetrics/fastcache v1.13.0 h1:AW4mheMR5Vd9FkAPUv+NH6Nhw+fmbTMGMsNAoA/+4G0=

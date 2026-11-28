@@ -25,10 +25,10 @@ See npm's [trusted publishing](https://docs.npmjs.com/trusted-publishers/) and [
 
 Merge the release workflow into `main`, then open **Actions → npm release → Run workflow**. Select `main`, enter the package version, and leave `publish` unchecked.
 
-The equivalent CLI command for version `0.1.2` is:
+The equivalent CLI command for version `0.1.3` is:
 
 ```bash
-gh workflow run release.yml --repo SolidRPC/rpc-xray --ref main -f version=0.1.2 -F publish=false
+gh workflow run release.yml --repo SolidRPC/rpc-xray --ref main -f version=0.1.3 -F publish=false
 ```
 
 The workflow checks metadata, formatting, types, unit tests and generated monitoring files. It validates the Prometheus rules, tests the packed tarball with the plain Node example and both ESM and CommonJS imports, and runs `npm publish --dry-run`. The `npm-package` artifact contains the tested tarball and its integrity manifest. A preview needs no npm publishing credential and does not generate blockchain RPC traffic.
@@ -53,27 +53,21 @@ The [Published SDK examples workflow](.github/workflows/published-examples.yml) 
 | SDK | Version source | Release artifact | Intended release identity |
 |---|---|---|---|
 | Python | `python/pyproject.toml` and `python/rpc_xray/core.py` | Wheel and source distribution | `solidrpc-rpc-xray` on PyPI |
-| Go | `go/xray.go` | Go module from a source tag | `go/v0.1.0` for the `go/` subdirectory |
+| Go | `go/xray.go` | Go module from a source tag | `go/v0.1.1` for the `go/` subdirectory |
 | Rust | `rust/Cargo.toml` | `.crate` archive | `solidrpc-rpc-xray` on crates.io |
 
 After CI passes on the merged commit, run **Native SDK release** on `main`. Choose one SDK, enter its exact version, and leave `publish` unchecked to prepare a candidate. The workflow uses the Python and Rust archives from the successful push CI run on that SHA. For Go it prepares a source archive for inspection. It reports SHA-256 checksums and uploads the candidate. A Go module release uses the Git tag.
 
 ```sh
-gh workflow run native-release.yml --ref main -f sdk=python -f version=0.1.0 -F publish=false
-gh workflow run native-release.yml --ref main -f sdk=go -f version=0.1.0 -F publish=false
-gh workflow run native-release.yml --ref main -f sdk=rust -f version=0.1.0 -F publish=false
+gh workflow run native-release.yml --ref main -f sdk=python -f version=0.1.1 -F publish=false
+gh workflow run native-release.yml --ref main -f sdk=go -f version=0.1.1 -F publish=false
+gh workflow run native-release.yml --ref main -f sdk=rust -f version=0.1.1 -F publish=false
 ```
 
 For the first Python publication, configure a [PyPI pending trusted publisher](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/) for project `solidrpc-rpc-xray`, repository `SolidRPC/rpc-xray`, workflow `native-release.yml`, and environment `pypi`. For Rust, configure a crates.io token authorized to publish the new crate as the `CARGO_REGISTRY_TOKEN` secret in the `crates-io` GitHub environment. For Go, the `go-release` job needs permission to create `go/v0.1.0` in the repository. Choose the publish checkbox only when releasing the selected SDK. Recheck that the SHA shown in the release run is the intended revision.
 
 Update the relevant package version, lockfile, SDK docs, and examples together. Keep the published package version independent from the shared contract version. Any change to metric meaning, labels, or error classification requires a coordinated contract review and tests across every SDK before release.
 
-### Go chunked-response fix
+### Update examples after publication
 
-After releasing the fix as `go/v0.1.1`, run the following command in both `examples/plain-go` and `examples/go-ethereum` to update their module requirements and checksums.
-
-```sh
-GOWORK=off go get github.com/SolidRPC/rpc-xray/go@v0.1.1
-```
-
-Verify both examples against the published module, then update the install version and chunked-response notes in the Go guides and root SDK table.
+Once the registries serve the release, update the public pins and lockfiles for the example apps. For Go, run `GOWORK=off go get github.com/SolidRPC/rpc-xray/go@vX.Y.Z` in both `examples/plain-go` and `examples/go-ethereum`. Verify the examples against the published packages with the **Published SDK examples** workflow.

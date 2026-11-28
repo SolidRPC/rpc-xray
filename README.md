@@ -44,10 +44,10 @@ All four SDKs use the same metric names, labels, histogram buckets, and error cl
 
 | Language | Supported integration | Package | Complete example |
 |---|---|---|---|
-| [JavaScript / TypeScript](js/README.md) | fetch, viem, ethers | [@solidrpc/rpc-xray 0.1.2 on npm](https://www.npmjs.com/package/@solidrpc/rpc-xray/v/0.1.2) | [Node.js](examples/plain-node/README.md) |
-| [Python](python/README.md) | HTTPX sync and async, requests, web3.py HTTPProvider | [solidrpc-rpc-xray 0.1.0 on PyPI](https://pypi.org/project/solidrpc-rpc-xray/0.1.0/) | [Python](examples/plain-python/README.md) |
-| [Go](go/README.md) | `net/http`, `go-ethereum` | [github.com/SolidRPC/rpc-xray/go v0.1.0](https://pkg.go.dev/github.com/SolidRPC/rpc-xray/go@v0.1.0) | [HTTP](examples/plain-go/README.md), [go-ethereum](examples/go-ethereum/README.md) |
-| [Rust](rust/README.md) | reqwest 0.13, Alloy 2.5 | [solidrpc-rpc-xray 0.1.0 on crates.io](https://crates.io/crates/solidrpc-rpc-xray/0.1.0) | [reqwest](examples/plain-rust/README.md), [Alloy](examples/alloy/README.md) |
+| [JavaScript / TypeScript](js/README.md) | fetch, viem, ethers | [@solidrpc/rpc-xray 0.1.3 on npm](https://www.npmjs.com/package/@solidrpc/rpc-xray/v/0.1.3) | [Node.js](examples/plain-node/README.md) |
+| [Python](python/README.md) | HTTPX sync and async, requests, web3.py HTTPProvider | [solidrpc-rpc-xray 0.1.1 on PyPI](https://pypi.org/project/solidrpc-rpc-xray/0.1.1/) | [Python](examples/plain-python/README.md) |
+| [Go](go/README.md) | `net/http`, `go-ethereum` | [github.com/SolidRPC/rpc-xray/go v0.1.1](https://pkg.go.dev/github.com/SolidRPC/rpc-xray/go@v0.1.1) | [HTTP](examples/plain-go/README.md), [go-ethereum](examples/go-ethereum/README.md) |
+| [Rust](rust/README.md) | reqwest 0.13, Alloy 2.5 | [solidrpc-rpc-xray 0.1.1 on crates.io](https://crates.io/crates/solidrpc-rpc-xray/0.1.1) | [reqwest](examples/plain-rust/README.md), [Alloy](examples/alloy/README.md) |
 
 The SDK guides and examples use the public registries. Every example has `/metrics`, shutdown handling, and a matching Prometheus config. Run one example at a time on the default port 9464, or assign separate ports and scrape targets.
 
@@ -219,10 +219,10 @@ npm ci
 npm pack
 ```
 
-`npm pack` builds the package and creates `solidrpc-rpc-xray-0.1.2.tgz`, including its license. Install that tarball in a test app using its actual path:
+`npm pack` builds the package and creates `solidrpc-rpc-xray-0.1.3.tgz`, including its license. Install that tarball in a test app using its actual path:
 
 ```bash
-npm install --no-save --package-lock=false /absolute/path/to/rpc-xray/js/solidrpc-rpc-xray-0.1.2.tgz
+npm install --no-save --package-lock=false /absolute/path/to/rpc-xray/js/solidrpc-rpc-xray-0.1.3.tgz
 ```
 
 The application import stays `@solidrpc/rpc-xray`. The [plain Node example](examples/plain-node/README.md#test-before-publication) and CI exercise this packaged build without requiring a published release.
