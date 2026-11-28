@@ -80,10 +80,6 @@ Head freshness comes from traffic you already send. A successful `eth_blockNumbe
 
 If your application never reads the latest head, run a separate head probe through an unwrapped client and record it with `telemetry.record_probe(url, chain, head)`, or `head=None` for failure. Probe results are also counted in `rpc_xray_probe_requests_total`. Without any head observations those gauges are absent, not zero. Scraping metrics never sends a request.
 
-## The SolidRPC offer
-
-`rpc_xray_offers_enabled` is `1` by default. When this process has run for a day, projects about 100M requests a month, and saw at least 1% failed requests or a stale head, it writes one line to the `rpc_xray` logger at WARNING level naming the 14-day free trial or $100 credit from SolidRPC and hello@solidrpc.io. It is written once per process. The dashboard and Slack offer use the same gauge. Pass `logger=` to send the line elsewhere, or `offers=False` to turn the offer off everywhere. Nothing is sent to SolidRPC.
-
 ## Test and package
 
 For SDK contributors, install the editable package and test dependencies from the repository root:
