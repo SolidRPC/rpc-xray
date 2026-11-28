@@ -115,7 +115,7 @@ RPC_XRAY_TARGETS=./targets.demo.yml docker compose --profile demo up -d
 
 The demo uses only local mock servers. Its separate target file scrapes `demo:9464` instead of an absent host app. Stop it with `docker compose --profile demo down` before returning to the default app target. Stopping the monitoring stack does not stop your application or its RPC requests.
 
-Open [Prometheus alerts](http://localhost:9090/alerts) to see the five incident rules and the separate offer rule. Expand a rule to inspect its threshold, hold time and provider labels. [Alertmanager](http://localhost:9093) shows the receiver for each firing alert. Slack incident notifications include a recovery message with the duration. The offer has its own receiver and sends only while firing. If you supply your own Alertmanager, retain its notification log for at least the 720-hour offer repeat interval. The bundled stack retains 31 days. Its message titles link to Alertmanager on localhost. When teammates need to open them, set `ALERTMANAGER_EXTERNAL_URL` to their reachable Alertmanager URL and recreate the service.
+Open [Prometheus alerts](http://localhost:9090/alerts) to see the five incident rules. Expand a rule to inspect its threshold, hold time and provider labels. [Alertmanager](http://localhost:9093) shows the receiver for each firing alert. Slack incident notifications include a recovery message with the duration. Message titles link to Alertmanager on localhost. When teammates need to open them, set `ALERTMANAGER_EXTERNAL_URL` to their reachable Alertmanager URL and recreate the service.
 
 Allow two scrapes plus a recording-rule evaluation for rate panels. Rollups first appear at the next five-minute evaluation. Weekly comparisons need accumulated history. No data is not evidence of a healthy endpoint.
 
@@ -166,7 +166,7 @@ Traffic, latency and failure-rate charts follow the time picker. Prometheus need
 
 The impact row estimates excess wait and the value of failed calls over the selected range. Set a value per request on each measured instance to include it in the dollar estimate. Edit the success and p95 targets at the top to change the chart reference lines.
 
-The fleet row covers all providers and chains in the selected datasource. It uses five-minute samples for weekly failures, projections, incident minutes and offer eligibility. Weekly comparisons and forecasts need a week of history.
+The fleet row covers all providers and chains in the selected datasource. It uses five-minute samples for weekly failures, projections and incident minutes. Weekly comparisons and forecasts need a week of history.
 
 ## What it does to your requests
 
@@ -186,12 +186,6 @@ By default, the JavaScript SDK detects each endpoint's chain with `eth_chainId` 
 
 For **zero additional RPC calls**, set `probeIntervalSeconds: 0` and supply an explicit `chain` to every wrapper. Disabling probes alone does not disable chain detection. Request counters and latency remain available. The wrapper measures head age from matching block-number and latest-block responses while observations remain fresh. The dashboard needs two measured providers on the same chain to show peer lag. Scraping `/metrics` itself never triggers RPC calls.
 
-## The SolidRPC offer
-
-rpc-xray is built by [SolidRPC](https://solidrpc.io). The fleet offer appears in Grafana when projected monthly volume reaches 100M, at least one incident was recorded in seven days, and at least one exporter has offers enabled. The conditions must hold for one hour. With Slack configured, Alertmanager sends the offer to the selected channel. To claim the 14-day free trial or $100 credit, email hello@solidrpc.io.
-
-Each SDK also checks its own traffic and can log the offer once after 24 hours at qualifying volume with failures or a stale head. Set the option on every exporter to disable the fleet offer. Nothing is sent to us. To turn it off, set `offers: false` in JavaScript and Rust, `offers=False` in Python, or `DisableOffers: true` in Go.
-
 ## Configuration
 
 The following options apply to JavaScript. See the language SDK READMEs for Python, Go, and Rust options.
@@ -203,7 +197,7 @@ The following options apply to JavaScript. See the language SDK READMEs for Pyth
 | `maxBodyBytes` | `1048576` | Largest response body that is inspected |
 | `valuePerRequest` | not set | Value of one request in USD, for the loss estimate |
 | `revenuePerHour` | not set | Revenue per hour in USD, exported for your own panels |
-| `offers` | `true` | Show the SolidRPC offer when eligible |
+| `offers` | `true` | Set to `false` to disable optional offer messages |
 | `logger` | `console.info` | Where the single offer line is written |
 
 ## Development and release testing
