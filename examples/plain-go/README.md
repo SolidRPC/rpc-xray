@@ -2,7 +2,7 @@
 
 A complete app that reads `eth_blockNumber` from one endpoint at most once per second, serves its latest result at `/`, and exports `/metrics`. It uses the published Go SDK. [Installation guide](../../go/README.md)
 
-The example currently installs SDK v0.1.0. If a client decodes one JSON value and closes a chunked HTTP 200 response before EOF, this version can count a provider error as `ok`. [Go transport behavior](../../go/README.md)
+The example uses SDK v0.1.1, which classifies a complete JSON-RPC response read from a chunked HTTP body even when the client closes it before EOF. [Go transport behavior](../../go/README.md)
 
 ## Install and run
 

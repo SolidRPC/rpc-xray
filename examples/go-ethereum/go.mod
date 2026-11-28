@@ -3,7 +3,7 @@ module github.com/SolidRPC/rpc-xray/examples/go-ethereum
 go 1.24.0
 
 require (
-	github.com/SolidRPC/rpc-xray/go v0.1.0
+	github.com/SolidRPC/rpc-xray/go v0.1.1
 	github.com/ethereum/go-ethereum v1.17.5
 )
 

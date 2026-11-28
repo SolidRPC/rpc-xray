@@ -10,6 +10,6 @@
     "test": "node --test server.test.mjs"
   },
   "dependencies": {
-    "@solidrpc/rpc-xray": "^0.1.2"
+    "@solidrpc/rpc-xray": "^0.1.3"
   }
 }
