@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const Version = "0.1.0"
+const Version = "0.1.1"
 const ContentType = "text/plain; version=0.0.4; charset=utf-8"
 
 const (

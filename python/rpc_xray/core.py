@@ -15,7 +15,7 @@ from ._contract import (
     RATE_PATTERNS,
 )
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 STALE_SECONDS = 180
 HEAD_FRESH_SECONDS = 120

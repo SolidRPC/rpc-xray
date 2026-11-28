@@ -172,7 +172,12 @@ jobs:
           JS
           release_smoke_dir=$(mktemp -d)
           cd "$release_smoke_dir"
-          npm install --ignore-scripts --no-audit --no-fund "@solidrpc/rpc-xray@$VERSION" --registry=https://registry.npmjs.org
+          deadline=$((SECONDS + 300))
+          until npm install --prefer-online --ignore-scripts --no-audit --no-fund "@solidrpc/rpc-xray@$VERSION" --registry=https://registry.npmjs.org >install.log 2>&1; do
+            cat install.log >&2
+            if ! grep -Eq 'code (ETARGET|E404)' install.log || (( SECONDS >= deadline )); then exit 1; fi
+            sleep 5
+          done
           node --input-type=module -e 'import { Xray } from "@solidrpc/rpc-xray"; const xray = new Xray({ probeIntervalSeconds: 0, offers: false }); if (typeof xray.metrics() !== "string") process.exit(1); xray.close()'
           node -e 'const { Xray } = require("@solidrpc/rpc-xray"); if (typeof Xray !== "function") process.exit(1)'
       - name: Summarize publication

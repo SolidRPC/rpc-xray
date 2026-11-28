@@ -16,7 +16,7 @@ To test an unreleased version, build and install the distributable wheel from th
 python3 -m venv .venv
 .venv/bin/python -m pip install build
 .venv/bin/python -m build python
-.venv/bin/python -m pip install 'python/dist/solidrpc_rpc_xray-0.1.0-py3-none-any.whl[requests]' 'web3>=7,<9'
+.venv/bin/python -m pip install 'python/dist/solidrpc_rpc_xray-0.1.1-py3-none-any.whl[requests]' 'web3>=7,<9'
 ```
 
 For an HTTPX-only app, install the same wheel without `[requests]` or `web3`. Existing applications can install the wheel into their own environment and retain their supported web3.py version. The wheel installs the package, not an editable checkout. Building it does not publish anything. Contributor setup is covered under [test and package](#test-and-package).
