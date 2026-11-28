@@ -133,7 +133,7 @@ Already running Prometheus? Take the files you need:
 - Your success rate on real traffic, next to where it should be.
 - Every failed request, split by kind: HTTP errors, rate limits, timeouts, and errors hidden inside HTTP 200 answers.
 - How old each provider's latest block is, and how far it lags behind your other providers.
-- A Slack message when an incident opens and another when it ends.
+- A Slack message when an incident opens and another when it ends. [See a firing alert and its recovery](#a-503-incident-from-firing-to-recovery).
 
 ## Incidents
 
@@ -151,6 +151,22 @@ An incident is something a person would have been paged for. Defaults, per chain
 - A null receipt, an empty log list and a zero balance are valid answers. They count as `ok`.
 - Error-rate incidents need at least a little traffic, so one failed call on a quiet endpoint does not page anyone.
 - With one endpoint, lag is zero and head age measures staleness. With two or more endpoints on the same chain, lag shows which one is behind.
+
+### A 503 incident, from firing to recovery
+
+A local Node.js app called a simulated endpoint that began returning HTTP 503. The purple line shows the share of requests that failed over the preceding three minutes. The dashed line marks the 5% alert threshold. The rule fires after one minute above the threshold with more than 0.1 requests per second.
+
+![Grafana shows the failure rate reaching 50%, then falling below the dashed 5% threshold shortly after 12:02 UTC.](assets/alert-threshold.png)
+
+**Firing in Slack.** At 11:58 UTC, the failure rate was 44.97%. Alertmanager sent this message to the test channel.
+
+![Slack firing notification reporting that 44.97% of requests to the test endpoint failed.](assets/slack-incident.png)
+
+**Resolved in Slack.** After the endpoint recovered and enough successful requests entered the three-minute window, the rule cleared at 12:02:30 UTC. The recovery message reports how long the alert was firing.
+
+![Slack recovery notification for the same endpoint showing an incident duration of 4 minutes 30 seconds.](assets/slack-resolved.png)
+
+To graph this rule in your own Grafana, plot `rpc_xray:transport_error_ratio:rate3m` for the affected chain and provider. Set the unit to **Percent (0.0–1.0)** and add a threshold at `0.05`. [Prometheus alert rules](alerts/rpc-xray.rules.yml)
 
 ## Read the dashboard
 
