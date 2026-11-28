@@ -2,9 +2,11 @@
 
 **See every request your RPC provider failed.**
 
-Add three lines of code. rpc-xray counts the errors, stale blocks and slow calls your users hit, and shows what they have cost you so far.
+Instrument your existing RPC client to see which methods drive traffic, when an endpoint slows down, and which calls fail even though the server returned HTTP 200.
 
-![A red line of failed user requests climbs while a flat green line shows where it should be](assets/hero.png)
+![Grafana shows request counts, traffic by RPC method, and a p95 latency spike on the archive endpoint](assets/dashboard.png)
+
+In this simulated Ethereum workload, `eth_getLogs` traffic rose around 10:25 UTC. The archive endpoint’s p95 response time peaked at 1.37 seconds. The primary stayed near 100 ms, below the 300 ms target.
 
 Your requests pass through untouched. rpc-xray measures each one, exposes Prometheus metrics, and ships a Grafana dashboard, alert rules and Slack incident messages that work as they are.
 
@@ -152,9 +154,11 @@ An incident is something a person would have been paged for. Defaults, per chain
 
 ## Read the dashboard
 
-![Local Grafana dashboard showing a firing JSON-RPC incident, its error count, and traffic from two simulated endpoints](assets/dashboard.png)
+![Grafana shows the archive endpoint’s rolling success rate dropping to 96% as JSON-RPC errors, rate limits, and HTTP errors rise](assets/provider-failures.png)
 
-Firing and pending incidents appear at the top, including on mobile. Incident history shows which rules fired within the current chain and provider filters. Select a single provider to isolate its history. **No samples** means no matching request telemetry, **Awaiting rules** means requests arrived before the first incident-rule sample, and **Quiet** means the rules evaluated with no firing incidents. [Desktop and mobile screenshots](assets/integration-review/README.md)
+During the same simulated incident, the archive endpoint’s rolling one-hour success rate fell to about 96%. JSON-RPC errors inside HTTP 200 responses were the largest failure category. Monitoring HTTP status alone would have missed them.
+
+Select a chain and provider to see its firing and pending incidents and the rules that fired during the selected range. **No samples** means no matching request telemetry, **Awaiting rules** means requests arrived before the first incident-rule sample, and **Quiet** means the rules evaluated with no firing incidents.
 
 The request overview counts requests from the selected SDK processes at the end of the time range. A failure first scraped at a count of one appears immediately. Counters reset when a process restarts. Provider success includes valid caller rejections, which also appear under **Caller errors**.
 
